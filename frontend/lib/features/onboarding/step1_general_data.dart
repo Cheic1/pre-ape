@@ -10,7 +10,7 @@ class Step1GeneralData extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final survey = ref.watch(surveyProvider);
+    final survey = ref.watch(surveyProvider).data;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),

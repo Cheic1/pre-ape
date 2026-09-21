@@ -17,7 +17,7 @@ class OnboardingPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final survey = ref.watch(surveyProvider);
+    final survey = ref.watch(surveyProvider).data;
     final currentStep = ref.watch(currentStepProvider);
 
     return Scaffold(

@@ -19,6 +19,14 @@ htmlcov/
 build/
 *.snap
 
+# Generated platform shells (CI regenerates via `flutter create`)
+frontend/android/
+frontend/ios/
+frontend/web/
+frontend/linux/
+frontend/macos/
+frontend/windows/
+
 # Android
 local.properties
 *.keystore

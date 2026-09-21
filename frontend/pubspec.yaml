@@ -11,34 +11,13 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  
-  # STATE MANAGEMENT
+
+  # STATE MANAGEMENT (used across lib/)
   flutter_riverpod: ^2.5.1
-  
-  # UI & ANIMATIONS
-  flutter_svg: ^2.0.10
-  lottie: ^2.7.0
-  shimmer: ^2.0.2
-  
-  # SENSORS & LOCATION
-  geolocator: ^10.1.0
-  geocoding_google: ^8.0.1
-  
-  # CAMERA & GALLERY
-  camera: ^0.10.6
-  image_picker: ^1.1.2
-  
-  # HAPTICS
-  vibration: ^1.9.1
-  
-  # LOCAL STORAGE
-  shared_preferences: ^2.3.3
-  hive: ^2.2.3
-  
-  # UTILITIES
-  url_launcher: ^6.3.1
-  path_provider: ^2.1.5
-  permission_handler: ^11.3.1
+
+  # NOTE: camera, image_picker, geolocator, storage, etc. were listed here
+  # with unpublished version pins and are imported by no file under lib/.
+  # Re-add them (with valid versions) when the feature using them lands.
 
 dev_dependencies:
   flutter_test:
@@ -55,10 +34,4 @@ flutter:
   fonts:
     - family: Inter
       fonts:
-        - asset: assets/fonts/Inter-Regular.ttf
-        - asset: assets/fonts/Inter-Medium.ttf
-        - weight: 500
-        - asset: assets/fonts/Inter-SemiBold.ttf
-        - weight: 600
-        - asset: assets/fonts/Inter-Bold.ttf
-        - weight: 700
+        - asset: assets/fonts/Inter.ttf

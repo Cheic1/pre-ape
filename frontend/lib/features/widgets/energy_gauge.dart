@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
+import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 
 class EnergyClass {
@@ -24,7 +25,7 @@ class EnergyClassData {
   final Color color;
   final String description;
 
-  EnergyClassData({
+  const EnergyClassData({
     required this.letter,
     required this.range,
     required this.color,

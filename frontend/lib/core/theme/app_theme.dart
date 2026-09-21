@@ -29,10 +29,10 @@ class AppTheme {
     
     inputDecorationTheme: const InputDecorationTheme(
       border: UnderlineInputBorder(
-        side: BorderSide(color: AppColors.border, width: 1),
+        borderSide: BorderSide(color: AppColors.border, width: 1),
       ),
       focusedBorder: UnderlineInputBorder(
-        side: BorderSide(color: AppColors.primary, width: 2),
+        borderSide: BorderSide(color: AppColors.primary, width: 2),
       ),
       labelStyle: AppTextStyles.labelLarge,
       hintStyle: AppTextStyles.bodyMedium,
@@ -47,7 +47,6 @@ class AppTheme {
       thumbShape: const RoundSliderThumbShape(
         enabledThumbRadius: 10,
         elevation: 4,
-        shadowColor: AppColors.primaryGlow,
       ),
       overlayColor: AppColors.primaryGlow.withValues(alpha: 0.2),
       valueIndicatorColor: AppColors.primary,

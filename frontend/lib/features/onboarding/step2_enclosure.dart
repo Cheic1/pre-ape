@@ -10,7 +10,7 @@ class Step2Enclosure extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final survey = ref.watch(surveyProvider);
+    final survey = ref.watch(surveyProvider).data;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -186,7 +186,9 @@ class Step2Enclosure extends ConsumerWidget {
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               side: const BorderSide(color: AppColors.border),
-              shape: BorderRadius.circular(AppRadius.md),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
             ),
             child: const Text('Indietro'),
           ),
@@ -208,8 +210,8 @@ class Step2Enclosure extends ConsumerWidget {
                     'Avanti',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                   ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.arrow_forward, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward, color: Colors.white, size: 20),
                 ],
               ),
             ),
@@ -257,7 +259,7 @@ class _SelectorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TapRegion(
+    return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),

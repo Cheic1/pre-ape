@@ -8,7 +8,7 @@ import 'package:pre_ape/features/onboarding/survey_provider.dart';
 class Step4Photos extends ConsumerWidget {
   const Step4Photos({super.key});
 
-  static const List<_PhotoSlot> slots = [
+  static const List<_PhotoSlot> _slots = [
     _PhotoSlot('Facciata', 'Foto edificio frontale', Icons.photo_camera),
     _PhotoSlot('Caldaia', 'Etichetta caldaia', Icons.photo_camera),
     _PhotoSlot('Finestra', 'Dettaglio infisso', Icons.photo_camera),
@@ -17,7 +17,7 @@ class Step4Photos extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final survey = ref.watch(surveyProvider);
+    final survey = ref.watch(surveyProvider).data;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -31,7 +31,7 @@ class Step4Photos extends ConsumerWidget {
         Wrap(
           spacing: AppSpacing.md,
           runSpacing: AppSpacing.md,
-          children: slots.map((slot) {
+          children: _slots.map((slot) {
             final hasPhoto = survey.photoPaths != null &&
                              survey.photoPaths!.any((p) => p.contains(slot.label));
             return _PhotoSlotCard(
@@ -69,7 +69,9 @@ class Step4Photos extends ConsumerWidget {
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               side: const BorderSide(color: AppColors.border),
-              shape: BorderRadius.circular(AppRadius.md),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
             ),
             child: const Text('Indietro'),
           ),
@@ -116,7 +118,7 @@ class _PhotoSlot {
   final String description;
   final IconData icon;
 
-  _PhotoSlot(this.label, this.description, this.icon);
+  const _PhotoSlot(this.label, this.description, this.icon);
 }
 
 class _PhotoSlotCard extends StatelessWidget {
@@ -132,7 +134,7 @@ class _PhotoSlotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TapRegion(
+    return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 140,

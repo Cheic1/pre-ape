@@ -10,7 +10,7 @@ class Step3Systems extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final survey = ref.watch(surveyProvider);
+    final survey = ref.watch(surveyProvider).data;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -50,7 +50,7 @@ class Step3Systems extends ConsumerWidget {
       runSpacing: AppSpacing.sm,
       children: options.map((opt) {
         final isSelected = survey.heatingType == opt.value;
-        return TapRegion(
+        return GestureDetector(
           onTap: () {
             ref.read(surveyProvider.notifier).updateHeatingType(opt.value);
           },
@@ -101,7 +101,7 @@ class Step3Systems extends ConsumerWidget {
       runSpacing: AppSpacing.sm,
       children: options.map((opt) {
         final isSelected = survey.generatorType == opt.value;
-        return TapRegion(
+        return GestureDetector(
           onTap: () {
             ref.read(surveyProvider.notifier).updateGeneratorType(opt.value);
           },
@@ -142,7 +142,9 @@ class Step3Systems extends ConsumerWidget {
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               side: const BorderSide(color: AppColors.border),
-              shape: BorderRadius.circular(AppRadius.md),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
             ),
             child: const Text('Indietro'),
           ),
