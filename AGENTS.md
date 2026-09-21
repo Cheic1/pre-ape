@@ -1,9 +1,9 @@
 # AGENTS.md – Pre-APE
 
-Two independent apps, no workspaces, no CI, no lint/typecheck config (not a git repo).
+Two independent apps, git repo `Cheic1/pre-ape` (branch `main`), CI in `.github/workflows/build.yml` (flutter analyze + backend pytest + web/android/ios artifacts, Pages deploy on `main`).
 
 - `backend/` – FastAPI API (Python `>=3.11`). Run/test from this dir.
-- `frontend/` – Flutter app (Dart `>=3.3.0 <4.0.0`, `flutter_riverpod`). No Flutter SDK in this environment (see `frontend/README.md`); build/analyze on an external runner.
+- `frontend/` – Flutter app (Dart `>=3.3.0 <4.0.0`, `flutter_riverpod`). No Flutter SDK in this environment (see `frontend/README.md`); builds run on CI (`subosito/flutter-action`, channel stable). Platform dirs (`android/`, `ios/`, `web/`) are **not committed** – CI regenerates them with `flutter create --org com.preape --project-name pre_ape --platforms=... .` (safe: only adds missing files, never touches `lib/`). Entry `frontend/lib/main.dart` (must stay wrapped in `ProviderScope` or Riverpod crashes at runtime).
 - Ignore `frontend/backend/` (stale, only `.pytest_cache`) and `nav.sh` paths pointing at it.
 
 ## Backend

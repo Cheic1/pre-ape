@@ -54,7 +54,7 @@ class AppRadius {
   static const double full = 999.0;
 }
 
-class App Shadows {
+class AppShadows {
   static const List<BoxShadow> card = [
     BoxShadow(
       color: Color(0x1A000000),

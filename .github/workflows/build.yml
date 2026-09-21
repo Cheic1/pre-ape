@@ -1,0 +1,134 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      # Generates missing platform dirs (android/, ios/, web/) without touching lib/
+      - run: flutter create --org com.preape --project-name pre_ape --platforms=web,android,ios .
+      - run: flutter pub get
+      - run: flutter analyze
+
+  backend-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pre_ape
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pre_ape
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install "./backend[dev]"
+      - run: cd backend && python -m pytest tests/ -v
+
+  web:
+    needs: analyze
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter create --org com.preape --project-name pre_ape --platforms=web .
+      - run: flutter pub get
+      - run: flutter build web --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: frontend/build/web
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: frontend/build/web
+
+  deploy-pages:
+    needs: web
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  android:
+    needs: analyze
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter create --org com.preape --project-name pre_ape --platforms=android .
+      - run: flutter pub get
+      # Debug APK is installable without a signing keystore.
+      # For release AAB/Play Store: add keystore secrets, then switch to `flutter build appbundle`.
+      - run: flutter build apk --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-debug
+          path: frontend/build/app/outputs/flutter-apk/app-debug.apk
+
+  ios:
+    needs: analyze
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter create --org com.preape --project-name pre_ape --platforms=ios .
+      - run: flutter pub get
+      # Unsigned: runs on simulator / sideload. TestFlight/real devices need signing (follow-up).
+      - run: flutter build ios --release --no-codesign
+      - run: tar -czf Runner-unsigned.tar.gz -C build/ios/iphoneos Runner.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-unsigned
+          path: frontend/Runner-unsigned.tar.gz

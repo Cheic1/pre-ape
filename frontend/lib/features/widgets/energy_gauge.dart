@@ -66,7 +66,7 @@ class EnergyGauge extends StatelessWidget {
             blurRadius: 24,
             offset: const Offset(0, 0),
           ),
-          AppShadows.card,
+          ...AppShadows.card,
         ],
       ),
       child: Stack(

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverprovider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
@@ -114,7 +114,7 @@ class Step4Photos extends ConsumerWidget {
 class _PhotoSlot {
   final String label;
   final String description;
-  final Icons icon;
+  final IconData icon;
 
   _PhotoSlot(this.label, this.description, this.icon);
 }

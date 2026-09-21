@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
@@ -46,9 +46,9 @@ class Step2Enclosure extends ConsumerWidget {
 
   Widget _buildWallThicknessSelector(WidgetRef ref, SurveyData survey) {
     final options = [
-      _WallOption('<30cm', 'Sottile', Icons.rectangle_outlined),
-      _WallOption('30-40cm', 'Medio', Icons.rectangle),
-      _WallOption('>40cm', 'Spesso', Icons.tab),
+      _WallOption('<30cm', 'Sottile', Icons.check_box_outline_blank),
+      _WallOption('30-40cm', 'Medio', Icons.indeterminate_check_box),
+      _WallOption('>40cm', 'Spesso', Icons.check_box),
     ];
 
     return Row(
@@ -93,7 +93,7 @@ class Step2Enclosure extends ConsumerWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.ar_tool, color: AppColors.primary, size: 24),
+            const Icon(Icons.straighten, color: AppColors.primary, size: 24),
             const SizedBox(width: 8),
             const Text(
               'Misurazione AR Spessore Muri',
@@ -223,14 +223,14 @@ class Step2Enclosure extends ConsumerWidget {
 class _WallOption {
   final String value;
   final String label;
-  final Icons icon;
+  final IconData icon;
 
   _WallOption(this.value, this.label, this.icon);
 }
 
 class _FrameOption {
   final String value;
-  final Icons icon;
+  final IconData icon;
 
   _FrameOption(this.value, this.icon);
 }
@@ -244,7 +244,7 @@ class _GlassOption {
 
 class _SelectorCard extends StatelessWidget {
   final bool isSelected;
-  final Icons icon;
+  final IconData icon;
   final String label;
   final VoidCallback onTap;
 

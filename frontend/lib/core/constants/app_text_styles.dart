@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pre_ape/core/constants/app_colors.dart';
 
 class AppTextStyles {
   static const String fontFamily = 'Inter';

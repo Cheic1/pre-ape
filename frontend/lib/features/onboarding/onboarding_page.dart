@@ -4,6 +4,7 @@ import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
+import 'package:pre_ape/features/widgets/energy_gauge.dart';
 import 'package:pre_ape/features/onboarding/step1_general_data.dart';
 import 'package:pre_ape/features/onboarding/step2_enclosure.dart';
 import 'package:pre_ape/features/onboarding/step3_systems.dart';

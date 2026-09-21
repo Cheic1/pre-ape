@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
+import 'package:pre_ape/core/constants/app_text_styles.dart';
 
 class AppTheme {
-  staticThemeData get darkTheme => ThemeData(
+  static ThemeData get darkTheme => ThemeData(
     brightness: Brightness.dark,
     scaffoldBackgroundColor: AppColors.background,
     primaryColor: AppColors.primary,
@@ -18,20 +19,20 @@ class AppTheme {
       iconTheme: IconThemeData(color: AppColors.textPrimary),
     ),
     
-    cardTheme: CardThemeData(
+    cardTheme: const CardThemeData(
       color: AppColors.surface,
       elevation: 0,
-      shape: const ContinuousRectangleBorder(
-        side: TextStyle(color: AppColors.border, style: BorderStyle.solid, width: 1),
+      shape: ContinuousRectangleBorder(
+        side: BorderSide(color: AppColors.border, width: 1),
       ),
     ),
     
-    inputDecorationTheme: BoxDecorationTheme(
-      border: const UnderlineBorder(
+    inputDecorationTheme: const InputDecorationTheme(
+      border: UnderlineInputBorder(
         side: BorderSide(color: AppColors.border, width: 1),
       ),
-      focusedBorder: const UnderlineBorder(
-        side: TextStyle(color: AppColors.primary, style: BorderStyle.solid, width: 2),
+      focusedBorder: UnderlineInputBorder(
+        side: BorderSide(color: AppColors.primary, width: 2),
       ),
       labelStyle: AppTextStyles.labelLarge,
       hintStyle: AppTextStyles.bodyMedium,

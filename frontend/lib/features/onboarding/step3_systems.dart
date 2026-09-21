@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverprovider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
@@ -39,7 +39,7 @@ class Step3Systems extends ConsumerWidget {
 
   Widget _buildHeatingSelector(WidgetRef ref, SurveyData survey) {
     final options = [
-      _HeatOption('Pompa di Calore', Icons.energy, 'Efficiente'),
+      _HeatOption('Pompa di Calore', Icons.electric_bolt, 'Efficiente'),
       _HeatOption('Condensazione', Icons.whatshot, 'Alta efficienza'),
       _HeatOption('Pellet', Icons.local_fire_department, 'Economica'),
       _HeatOption('Gas', Icons.gas_meter, 'Tradizionale'),
@@ -92,7 +92,7 @@ class Step3Systems extends ConsumerWidget {
       _GenOption('Caldaia a Condensazione', Icons.electrical_services),
       _GenOption('Caldaia Tradizionale', Icons.electrical_services_outlined),
       _GenOption('Stufa a Pellet', Icons.local_fire_department),
-      _GenOption('Pompa Calore Aria-Aria', Icons.energy),
+      _GenOption('Pompa Calore Aria-Aria', Icons.electric_bolt),
       _GenOption('Pannelli Solari', Icons.solar_power),
     ];
 
@@ -178,7 +178,7 @@ class Step3Systems extends ConsumerWidget {
 
 class _HeatOption {
   final String value;
-  final Icons icon;
+  final IconData icon;
   final String description;
 
   _HeatOption(this.value, this.icon, this.description);
@@ -186,7 +186,7 @@ class _HeatOption {
 
 class _GenOption {
   final String value;
-  final Icons icon;
+  final IconData icon;
 
   _GenOption(this.value, this.icon);
 }
