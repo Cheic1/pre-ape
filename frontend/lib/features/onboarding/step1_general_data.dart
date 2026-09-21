@@ -158,15 +158,13 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
               // Open OSM map (web only)
               if (kIsWeb)
                 OutlinedButton.icon(
-                  onPressed: () {
+                  onPressed: () async {
                     final lat = survey.latitude;
                     final lng = survey.longitude;
-                    // Open OpenStreetMap at the current coordinates.
-                    // url_launcher is declared in pubspec.yaml.
-                    _openOsmMap(lat, lng);
+                    await _openOsmMap(lat, lng);
                   },
                   icon: const Icon(Icons.map_outlined, size: 18),
-                  label: const Text('Apri mappa (OpenStreetMap)'),
+                  label: const Text('Apri mappa e importa punto'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.border),
@@ -194,8 +192,10 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
     );
   }
 
-  /// Open OpenStreetMap in a new browser tab centred on (lat, lng).
-  /// `url_launcher` works on web, Android, and iOS out of the box.
+  /// Open OpenStreetMap at the current coordinates to let the user pick a point.
+  /// After the user clicks a location on OSM, they copy the coordinates from
+  /// the URL hash (e.g. #map=17/41.90280/12.49640) and paste them back via a
+  /// small import dialog that appears after the map opens.
   Future<void> _openOsmMap(double lat, double lng) async {
     final uri = Uri.parse(
       'https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=17/$lat/$lng',
@@ -203,6 +203,53 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+
+    // Small delay to let the external browser open, then prompt.
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    _promptImportOsmCoordinates(context, ref, lat, lng);
+  }
+
+  void _promptImportOsmCoordinates(
+      BuildContext context, WidgetRef ref, double lat, double lng) {
+    final controller =
+        TextEditingController(text: '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Importa coordinate da OSM'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'Incolla lat, lng (es. 41.902800, 12.496400)',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Annulla'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final parts = controller.text.split(',');
+              if (parts.length >= 2) {
+                final lat_ = double.tryParse(parts[0].trim());
+                final lng_ = double.tryParse(parts[1].trim());
+                if (lat_ != null && lng_ != null) {
+                  ref.read(surveyProvider.notifier).updateLatLng(lat_, lng_);
+                  final addr = await reverseGeocode(lat_, lng_);
+                  if (addr != null && addr.isNotEmpty) {
+                    ref.read(surveyProvider.notifier).updateAddress(addr);
+                  }
+                }
+              }
+              if (ctx.mounted) Navigator.of(ctx).pop();
+            },
+            child: const Text('Importa'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── Sliders ────────────────────────────────────────────────────────
@@ -262,22 +309,64 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
         Slider(
           value: survey.avgHeight,
           min: 2,
-          max: 6,
-          divisions: 40,
+          max: 4,
+          divisions: 20,
           label: '${survey.avgHeight.toStringAsFixed(1)} m',
           onChanged: (value) {
             ref.read(surveyProvider.notifier).updateAvgHeight(value);
           },
         ),
         const SizedBox(height: AppSpacing.xs),
-        const Row(
+        Row(
           children: [
-            Text('2 m', style: AppTextStyles.bodySmall),
-            Spacer(),
-            Text('6 m', style: AppTextStyles.bodySmall),
+            const Text('2 m', style: AppTextStyles.bodySmall),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () => _promptManualHeight(context, ref, survey),
+              icon: const Icon(Icons.edit, size: 16),
+              label: const Text('Inserisci manually'),
+            ),
+            const Spacer(),
+            const Text('4 m', style: AppTextStyles.bodySmall),
           ],
         ),
       ],
+    );
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────
+
+  void _promptManualHeight(
+      BuildContext context, WidgetRef ref, SurveyData survey) {
+    final controller =
+        TextEditingController(text: survey.avgHeight.toStringAsFixed(1));
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Altezza media'),
+        content: TextField(
+          controller: controller,
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(hintText: 'es. 2.7'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Annulla'),
+          ),
+          TextButton(
+            onPressed: () {
+              final v = double.tryParse(controller.text.replaceAll(',', '.'));
+              if (v != null && v >= 0) {
+                ref.read(surveyProvider.notifier).updateAvgHeight(v);
+              }
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Salva'),
+          ),
+        ],
+      ),
     );
   }
 
