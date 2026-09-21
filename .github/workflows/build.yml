@@ -63,7 +63,7 @@ jobs:
           channel: stable
       - run: flutter create --org com.preape --project-name pre_ape --platforms=web .
       - run: flutter pub get
-      - run: flutter build web --release
+      - run: flutter build web --release --base-href /pre-ape/
       - uses: actions/upload-artifact@v4
         with:
           name: web-build
