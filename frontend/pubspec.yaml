@@ -15,6 +15,9 @@ dependencies:
   # STATE MANAGEMENT (used across lib/)
   flutter_riverpod: ^2.5.1
 
+  # URL LAUNCHER – used to open OpenStreetMap from the address editor.
+  url_launcher: ^6.2.0
+
   # NOTE: camera, image_picker, geolocator, storage, etc. were listed here
   # with unpublished version pins and are imported by no file under lib/.
   # Re-add them (with valid versions) when the feature using them lands.

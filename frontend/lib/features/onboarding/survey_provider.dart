@@ -1,10 +1,33 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'web_geolocation_stub.dart'
+    if (dart.library.js_interop) 'web_geolocation.dart';
+
+/// Default centre of Italy (near Rome) used when the browser Geolocation
+/// API is unavailable or the user denies the permission prompt.
+const _defaultLatLng = (lat: 41.9028, lng: 12.4964);
+
 class SurveyData {
   String? address;
-  double? squareMeters;
-  double? avgHeight;
+
+  /// Default 60 m² – typical apartment in Italy.
+  double squareMeters = 60.0;
+
+  /// Default 2.7 m – standard residential floor-to-ceiling height.
+  double avgHeight = 2.7;
+
+  /// Coordinates – initialised to centre of Italy; updated by
+  /// browser Geolocation when available.
+  double latitude = _defaultLatLng.lat;
+  double longitude = _defaultLatLng.lng;
+
+  /// True while the browser Geolocation request is in flight.
+  bool locating = false;
+
   double currentScore = 30.0;
 
   String? wallThickness;
@@ -17,6 +40,9 @@ class SurveyData {
     String? address,
     double? squareMeters,
     double? avgHeight,
+    double? latitude,
+    double? longitude,
+    bool? locating,
     double? currentScore,
     String? wallThickness,
     String? windowType,
@@ -28,6 +54,9 @@ class SurveyData {
       ..address = address ?? this.address
       ..squareMeters = squareMeters ?? this.squareMeters
       ..avgHeight = avgHeight ?? this.avgHeight
+      ..latitude = latitude ?? this.latitude
+      ..longitude = longitude ?? this.longitude
+      ..locating = locating ?? this.locating
       ..currentScore = currentScore ?? this.currentScore
       ..wallThickness = wallThickness ?? this.wallThickness
       ..windowType = windowType ?? this.windowType
@@ -40,6 +69,7 @@ class SurveyData {
 class SurveyNotifier extends ChangeNotifier {
   SurveyData _data = SurveyData();
   int _currentStep = 1;
+  bool _locationFetched = false;
 
   SurveyData get data => _data;
   int get currentStep => _currentStep;
@@ -59,6 +89,11 @@ class SurveyNotifier extends ChangeNotifier {
   void updateAvgHeight(double height) {
     _data = _data.copyWith(avgHeight: height);
     _recalculateScore();
+    notifyListeners();
+  }
+
+  void updateLatLng(double lat, double lng) {
+    _data = _data.copyWith(latitude: lat, longitude: lng);
     notifyListeners();
   }
 
@@ -100,11 +135,48 @@ class SurveyNotifier extends ChangeNotifier {
     }
   }
 
+  /// Attempt to fetch the user's coordinates via the browser Geolocation API
+  /// and reverse-geocode them through Nominatim.  On failure, silently keeps
+  /// the Italy default so the survey can proceed without blocking the user.
+  ///
+  /// Safe to call multiple times; only the first invocation triggers the flow.
+  Future<void> fetchLocation() async {
+    if (_locationFetched) return;
+    _locationFetched = true;
+    if (!kIsWeb) return;
+
+    _data = _data.copyWith(locating: true);
+    notifyListeners();
+
+    try {
+      final pos = await fetchBrowserGeolocation(
+        timeout: const Duration(seconds: 8),
+      );
+      _data = _data.copyWith(
+        latitude: pos.lat,
+        longitude: pos.lng,
+      );
+      notifyListeners();
+
+      // Best-effort reverse geocoding – non-blocking failure.
+      final addr = await reverseGeocode(pos.lat, pos.lng);
+      if (addr != null && addr.isNotEmpty) {
+        _data = _data.copyWith(address: addr);
+        notifyListeners();
+      }
+    } catch (_) {
+      // Permission denied or timeout – keep Italy default.
+    } finally {
+      _data = _data.copyWith(locating: false);
+      notifyListeners();
+    }
+  }
+
   void _recalculateScore() {
     double score = 30.0;
 
-    if (_data.squareMeters != null) {
-      score += (_data.squareMeters! / 100).clamp(0, 20);
+    if (_data.squareMeters > 0) {
+      score += (_data.squareMeters / 100).clamp(0, 20);
     }
 
     switch (_data.wallThickness) {

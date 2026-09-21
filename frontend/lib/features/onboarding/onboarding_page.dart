@@ -10,15 +10,13 @@ import 'package:pre_ape/features/onboarding/step2_enclosure.dart';
 import 'package:pre_ape/features/onboarding/step3_systems.dart';
 import 'package:pre_ape/features/onboarding/step4_photos.dart';
 
-final currentStepProvider = StateProvider<int>((ref) => 1);
-
 class OnboardingPage extends ConsumerWidget {
   const OnboardingPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final survey = ref.watch(surveyProvider).data;
-    final currentStep = ref.watch(currentStepProvider);
+    final currentStep = ref.watch(surveyProvider).currentStep;
 
     return Scaffold(
       body: SafeArea(
@@ -83,13 +81,13 @@ class OnboardingPage extends ConsumerWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _StepDot(step: 1, label: 'Dati', isActive: currentStep == 1),
+          _StepDot(step: 1, label: 'Dati', isActive: currentStep == 1, isCompleted: currentStep > 1),
           _StepLine(isActive: currentStep >= 2),
-          _StepDot(step: 2, label: 'Involucro', isActive: currentStep == 2),
+          _StepDot(step: 2, label: 'Involucro', isActive: currentStep == 2, isCompleted: currentStep > 2),
           _StepLine(isActive: currentStep >= 3),
-          _StepDot(step: 3, label: 'Impianti', isActive: currentStep == 3),
+          _StepDot(step: 3, label: 'Impianti', isActive: currentStep == 3, isCompleted: currentStep > 3),
           _StepLine(isActive: currentStep >= 4),
-          _StepDot(step: 4, label: 'Foto', isActive: currentStep == 4),
+          _StepDot(step: 4, label: 'Foto', isActive: currentStep == 4, isCompleted: false),
         ],
       ),
     );
@@ -115,11 +113,13 @@ class _StepDot extends StatelessWidget {
   final int step;
   final String label;
   final bool isActive;
+  final bool isCompleted;
 
   const _StepDot({
     required this.step,
     required this.label,
     required this.isActive,
+    required this.isCompleted,
   });
 
   @override
@@ -138,7 +138,7 @@ class _StepDot extends StatelessWidget {
               width: 1.5,
             ),
           ),
-          child: isActive
+          child: isCompleted
               ? const Icon(Icons.check, color: Colors.white, size: 16)
               : Center(
                   child: Text(

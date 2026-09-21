@@ -1,15 +1,33 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
 
-class Step1GeneralData extends ConsumerWidget {
+class Step1GeneralData extends ConsumerStatefulWidget {
   const Step1GeneralData({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<Step1GeneralData> createState() => _Step1GeneralDataState();
+}
+
+class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
+  bool _locationInitiated = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // Trigger browser geolocation once on first build.
+    if (!_locationInitiated) {
+      _locationInitiated = true;
+      // Schedule after the current frame to avoid setState-during-build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(surveyProvider.notifier).fetchLocation();
+      });
+    }
+
     final survey = ref.watch(surveyProvider).data;
 
     return ListView(
@@ -17,25 +35,29 @@ class Step1GeneralData extends ConsumerWidget {
       children: [
         Text('Dati Generali', style: AppTextStyles.headlineLarge),
         const SizedBox(height: AppSpacing.xs),
-        Text('Inserisci le informazioni di base dell\'edificio', style: AppTextStyles.bodyMedium),
+        Text('Inserisci le informazioni di base dell\'edificio',
+            style: AppTextStyles.bodyMedium),
         const SizedBox(height: AppSpacing.xl),
-        
-        _buildAddressField(ref, survey),
+
+        _buildAddressField(context, ref, survey),
         const SizedBox(height: AppSpacing.lg),
-        
+
         _buildMqSlider(ref, survey),
         const SizedBox(height: AppSpacing.lg),
-        
+
         _buildHeightSlider(ref, survey),
-        
+
         const SizedBox(height: AppSpacing.xxl),
-        
+
         _buildNextButton(context, ref),
       ],
     );
   }
 
-  Widget _buildAddressField(WidgetRef ref, SurveyData survey) {
+  // ── Address field ───────────────────────────────────────────────────
+
+  Widget _buildAddressField(
+      BuildContext context, WidgetRef ref, SurveyData survey) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -50,17 +72,30 @@ class Step1GeneralData extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.location_on_outlined, color: AppColors.textMuted, size: 20),
+              Icon(
+                survey.locating ? Icons.hourglass_empty : Icons.location_on_outlined,
+                color: survey.locating ? AppColors.primary : AppColors.textMuted,
+                size: 20,
+              ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Text(
-                  survey.address ?? 'Seleziona indirizzo sulla mappa',
-                  style: AppTextStyles.bodyMedium,
-                ),
+                child: survey.locating
+                    ? Text(
+                        'Rilevamento posizione…',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textMuted,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      )
+                    : Text(
+                        survey.address ?? 'Seleziona indirizzo sulla mappa',
+                        style: AppTextStyles.bodyMedium,
+                      ),
               ),
               IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.edit_outlined, color: AppColors.primary, size: 20),
+                onPressed: () => _openAddressEditor(context, ref, survey),
+                icon: const Icon(Icons.edit_outlined,
+                    color: AppColors.primary, size: 20),
               ),
             ],
           ),
@@ -68,6 +103,109 @@ class Step1GeneralData extends ConsumerWidget {
       ],
     );
   }
+
+  // ── Address editor dialog ──────────────────────────────────────────
+
+  void _openAddressEditor(
+      BuildContext context, WidgetRef ref, SurveyData survey) {
+    final controller = TextEditingController(text: survey.address ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Indirizzo edificio'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Manual text entry
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: 'Via Roma 1, Milano',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+
+              // Geolocation button (web only)
+              if (kIsWeb)
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    await ref
+                        .read(surveyProvider.notifier)
+                        .fetchLocation();
+                    // If no address was resolved, show coordinates as fallback.
+                    if (context.mounted) {
+                      final s = ref.read(surveyProvider).data;
+                      if (s.address == null && !s.locating) {
+                        ref.read(surveyProvider.notifier).updateAddress(
+                              '${s.latitude.toStringAsFixed(5)}, ${s.longitude.toStringAsFixed(5)}',
+                            );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.my_location, size: 18),
+                  label: const Text('Usa la mia posizione'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.border),
+                  ),
+                ),
+
+              if (kIsWeb) const SizedBox(height: AppSpacing.sm),
+
+              // Open OSM map (web only)
+              if (kIsWeb)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    final lat = survey.latitude;
+                    final lng = survey.longitude;
+                    // Open OpenStreetMap at the current coordinates.
+                    // url_launcher is declared in pubspec.yaml.
+                    _openOsmMap(lat, lng);
+                  },
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: const Text('Apri mappa (OpenStreetMap)'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.border),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Annulla'),
+          ),
+          TextButton(
+            onPressed: () {
+              ref
+                  .read(surveyProvider.notifier)
+                  .updateAddress(controller.text);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Salva'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Open OpenStreetMap in a new browser tab centred on (lat, lng).
+  /// `url_launcher` works on web, Android, and iOS out of the box.
+  Future<void> _openOsmMap(double lat, double lng) async {
+    final uri = Uri.parse(
+      'https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=17/$lat/$lng',
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  // ── Sliders ────────────────────────────────────────────────────────
 
   Widget _buildMqSlider(WidgetRef ref, SurveyData survey) {
     return Column(
@@ -78,18 +216,18 @@ class Step1GeneralData extends ConsumerWidget {
             Text('M² Totali', style: AppTextStyles.labelLarge),
             const Spacer(),
             Text(
-              '${survey.squareMeters?.toInt() ?? 0} m²',
+              '${survey.squareMeters.toInt()} m²',
               style: AppTextStyles.titleMedium,
             ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
         Slider(
-          value: survey.squareMeters ?? 0,
+          value: survey.squareMeters,
           min: 0,
           max: 500,
           divisions: 50,
-          label: '${survey.squareMeters?.toInt() ?? 0} m²',
+          label: '${survey.squareMeters.toInt()} m²',
           onChanged: (value) {
             ref.read(surveyProvider.notifier).updateSquareMeters(value);
           },
@@ -115,18 +253,18 @@ class Step1GeneralData extends ConsumerWidget {
             Text('Altezza Media', style: AppTextStyles.labelLarge),
             const Spacer(),
             Text(
-              '${survey.avgHeight?.toStringAsFixed(1) ?? 0} m',
+              '${survey.avgHeight.toStringAsFixed(1)} m',
               style: AppTextStyles.titleMedium,
             ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
         Slider(
-          value: survey.avgHeight ?? 0,
+          value: survey.avgHeight,
           min: 2,
           max: 6,
           divisions: 40,
-          label: '${survey.avgHeight?.toStringAsFixed(1) ?? 0} m',
+          label: '${survey.avgHeight.toStringAsFixed(1)} m',
           onChanged: (value) {
             ref.read(surveyProvider.notifier).updateAvgHeight(value);
           },
