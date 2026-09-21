@@ -1,67 +1,72 @@
-// Conditional import for web-only Geolocation + Nominatim reverse geocoding.
-// Only imported on web builds via the stub pattern.
+// Web-only Geolocation + Nominatim reverse geocoding using package:web + dart:js_interop.
+// Only imported on web builds via the conditional import pattern.
 
 import 'dart:async';
-import 'dart:html' as html;
+import 'dart:js_interop';
 
-/// Returns (lat, lng) from the browser Geolocation API,
-/// or throws on timeout / user denial.
+import 'package:web/web.dart' as web;
+
 Future<({double lat, double lng})> fetchBrowserGeolocation({
   Duration timeout = const Duration(seconds: 10),
 }) async {
   final completer = Completer<({double lat, double lng})>();
 
-  html.window.navigator.geolocation.getCurrentPosition(
-    (html.GeolocationPosition pos) {
+  web.window.navigator.geolocation.getCurrentPosition(
+    ([web.GeolocationPosition? pos]) {
+      if (pos == null) {
+        if (!completer.isCompleted) {
+          completer.completeError(StateError('Geolocation returned null position'));
+        }
+        return;
+      }
       if (!completer.isCompleted) {
         completer.complete(
-          (lat: pos.coords!.latitude!, lng: pos.coords!.longitude!),
+          (lat: pos.coords.latitude, lng: pos.coords.longitude),
         );
       }
     },
-    (html.GeolocationPositionError err) {
+    ([web.GeolocationPositionError? err]) {
       if (!completer.isCompleted) {
         completer.completeError(
-          StateError('Geolocation denied (code ${err.code})'),
+          StateError('Geolocation denied or unavailable (code ${err?.code})'),
         );
       }
     },
-    html.PositionOptions(
-      timeout: timeout.inMilliseconds,
-      enableHighAccuracy: true,
-      maximumAge: 60000,
-    ),
+    web.PositionOptions()
+      ..timeout = timeout.inMilliseconds
+      ..enableHighAccuracy = true
+      ..maximumAge = 60000,
   );
 
   return completer.future;
 }
 
-/// Best-effort reverse geocoding via OpenStreetMap Nominatim.
-/// Returns a display-name string or null on any failure.
 Future<String?> reverseGeocode(double lat, double lng) async {
   try {
     final url =
         'https://nominatim.openstreetmap.org/reverse?format=json'
         '&lat=$lat&lon=$lng&zoom=18&addressdetails=1';
 
-    final req = await html.HttpRequest.request(
-      url,
-      method: 'GET',
-      requestHeaders: {
-        'Accept': 'application/json',
-        'User-Agent': 'PreAPE/1.0 (energy-survey-app)',
-      },
-    );
+    final resp = await web.window
+        .fetch(url.toJS, web.RequestInit(
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'PreAPE/1.0 (energy-survey-app)',
+          }.jsify(),
+        ).toJS)
+        .toDart;
 
-    final body = req.responseText ?? '';
-    // Minimal parse – extract "display_name" without importing dart:convert.
-    final idx = body.indexOf('"display_name"');
+    if (!resp.ok) return null;
+
+    final text = await resp.text().toDart;
+    final idx = text.indexOf('"display_name"');
     if (idx == -1) return null;
-    final colon = body.indexOf(':', idx) + 1;
-    final valStart = body.indexOf('"', colon) + 1;
-    final valEnd = body.indexOf('"', valStart);
+    final colon = text.indexOf(':', idx) + 1;
+    final valStart = text.indexOf('"', colon) + 1;
+    final valEnd = text.indexOf('"', valStart);
     if (valEnd <= valStart) return null;
-    final display = body.substring(valStart, valEnd);
+    final display = text.substring(valStart, valEnd);
     return display.isNotEmpty ? display : null;
   } catch (_) {
     return null;

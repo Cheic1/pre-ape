@@ -146,8 +146,45 @@
 
 ---
 
-## 8. Sprint Change Log
+## 8. Legal APE Compliance (Italy)
+
+> This section captures mandatory fields for a real *Attestato di Prestazione Energetica* so the wizard can collect legally valid data.
+
+### 8.1 Scope & Validity (must-have)
+
+| Field | When | Why |
+|-------|------|-----|
+| *Destinazione d'uso* (Res/Non-res) | Always | Determines UNI TS 11300 calculation path |
+| *Oggetto attestato* (intero edificio / unità / gruppo) | Always | Defines calculation scope |
+| Numero unità immobiliari | Always | Needed for centralised-system splitting |
+| *Motivazione* (vendita / locazione / ristrutturazione / …) | Always | Legal trigger for APE issuance |
+| Comune (ISTAT) + zona climatica | Always | Drives degree-days and thresholds |
+| Anno di costruzione | Always | Fallback envelope assumptions |
+| Superficie utile riscaldata (m²) | Always | Denominator for performance indices |
+| Volume lordo riscaldato (m³) | Always | S/V ratio and thermal mass |
+| Coordinate GIS | Always | Required by SIAPE and solar exposure |
+| At least 1 site visit | Always | APE is invalid without it |
+| CTI-certified software | Always | Legal calculation requirement |
+
+### 8.2 Envelope & Systems (core inputs)
+
+- Envelope: opaque transmittance (U or construction-era tables), windows (frame + glass), thermal bridges (ψ), orientation/tilt, inertia class.
+- Systems: type, fuel vector, nominal power, year, seasonal efficiency η, regional CIT code when ≥ 10 kW.
+- If a system is absent but legally required for simulation, mark as *Impianto simulato in quanto assente*.
+
+### 8.3 Output Indices (must appear on APE)
+
+- EPH,nd, YIE, EPgl,nren, EPgl,ren, CO₂ emissions, exported energy (even 0), energy class A4–G.
+
+### 8.4 Recommendation Section
+
+- At least one recommended intervention with projected class after improvement.
+
+---
+
+## 9. Sprint Change Log
 
 | Date | Change | Files |
 |------|--------|-------|
 | 2026-09-21 | Survey defaults (60 m², 2.7 m, Rome coords); geolocation + Nominatim; OSM map button; `url_launcher` | `survey_provider.dart`, `step1_general_data.dart`, `web_geolocation.dart`, `web_geolocation_stub.dart`, `pubspec.yaml` |
+| 2026-09-21 | Add legal APE field baseline (Italy) | `REQUIREMENTS.md` |
