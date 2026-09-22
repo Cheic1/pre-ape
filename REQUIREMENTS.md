@@ -188,3 +188,4 @@
 |------|--------|-------|
 | 2026-09-21 | Survey defaults (60 m², 2.7 m, Rome coords); geolocation + Nominatim; OSM map button; `url_launcher` | `survey_provider.dart`, `step1_general_data.dart`, `web_geolocation.dart`, `web_geolocation_stub.dart`, `pubspec.yaml` |
 | 2026-09-21 | Add legal APE field baseline (Italy) | `REQUIREMENTS.md` |
+| 2026-09-23 | P2-B4: extract `computeScore`/`energyClassForScore` to pure `lib/core/scoring.dart` (dedup gauge/report); first Flutter test suite: 27 tests / 58 assertions; reviews phase 3: 4×APPROVE; follow-up P2-B5 (extract `SurveyData` to break core↔features import cycle) | `scoring.dart`, `survey_provider.dart`, `report_builder.dart`, `energy_gauge.dart`, `test/scoring_test.dart` |

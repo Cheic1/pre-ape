@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pre_ape/core/scoring.dart';
 
 import 'web_geolocation_stub.dart'
     if (dart.library.js_interop) 'web_geolocation.dart';
@@ -193,50 +194,9 @@ class SurveyNotifier extends ChangeNotifier {
     }
   }
 
+  /// Score formula extracted to `lib/core/scoring.dart` (single source).
   void _recalculateScore() {
-    double score = 30.0;
-
-    if (_data.squareMeters > 0) {
-      score += (_data.squareMeters / 100).clamp(0, 20);
-    }
-
-    switch (_data.wallThickness) {
-      case '>40cm':
-        score += 25;
-        break;
-      case '30-40cm':
-        score += 15;
-        break;
-      case '<30cm':
-        score += 5;
-        break;
-    }
-
-    if (_data.windowType != null) {
-      if (_data.windowType!.contains('Triplo')) {
-        score += 15;
-      } else if (_data.windowType!.contains('Doppio')) {
-        score += 10;
-      } else {
-        score += 5;
-      }
-    }
-
-    switch (_data.heatingType) {
-      case 'Pompa di Calore':
-        score += 10;
-        break;
-      case 'Condensazione':
-        score += 8;
-        break;
-      case 'Pellet':
-        score += 6;
-        break;
-      default:
-        score += 2;
-    }
-
-    _data = _data.copyWith(currentScore: score.clamp(0, 100));
+    _data = _data.copyWith(currentScore: computeScore(_data));
   }
 }
 
