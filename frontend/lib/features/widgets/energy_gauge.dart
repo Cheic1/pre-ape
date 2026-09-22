@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
+import 'package:pre_ape/core/scoring.dart';
 
 class EnergyClass {
   static const List<EnergyClassData> classes = [
@@ -43,11 +44,10 @@ class EnergyGauge extends StatelessWidget {
     this.size = 180,
   });
 
-  EnergyClassData get currentClass {
-    final normalized = score.clamp(0, 100);
-    final index = (normalized / 100 * 9).round().clamp(0, 9);
-    return EnergyClass.classes[9 - index];
-  }
+  /// Mapping delegato a `core/scoring.dart` (fonte unica) – rendering
+  /// invariato: stessa tabella `EnergyClass.classes`.
+  EnergyClassData get currentClass =>
+      EnergyClass.classes[9 - energyClassIndexForScore(score)];
 
   @override
   Widget build(BuildContext context) {

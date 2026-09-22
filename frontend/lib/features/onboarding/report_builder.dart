@@ -4,15 +4,8 @@
 /// open it offline, print it, or save it as PDF from the browser.
 library;
 
+import 'package:pre_ape/core/scoring.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
-import 'package:pre_ape/features/widgets/energy_gauge.dart';
-
-/// Same mapping used by [EnergyGauge] so the report and the gauge agree.
-String energyClassForScore(double score) {
-  final normalized = score.clamp(0, 100);
-  final index = ((normalized / 100) * 9).round().clamp(0, 9);
-  return EnergyClass.classes[9 - index].letter;
-}
 
 String _esc(String? value) {
   if (value == null || value.isEmpty) return '—';
