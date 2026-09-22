@@ -51,3 +51,19 @@
 1. Completano A1+A2 (backend) e B4a (frontend) già in corso → review fase 3.
 2. Poi fase 2 qui: Dockerfiles + `docker-compose.yml` + Caddy + profilo test.
 3. P1-A3 (API client) procede in parallelo sul contratto JWT/Survey.
+
+## ✅ Esito fase 2 — Opzione A eseguita (23/09/26, 00:34 CEST)
+Scelta utente (fase 1): **server domestico + tunnel cloudflared esistente "ctm"**.
+
+| Componente | Valore |
+|---|---|
+| URL pubblico | **https://preape.cheic2.it/** → redirect → `/pre-ape/` (HTTPS abilita GPS+fotocamera) |
+| Config tunnel | `~/.cloudflared/ctm.yml` (nuova; la vecchia `ctm-redirect.yml` aveva catch-all in posizione invalida → backup creato) |
+| Ingress | `preape.cheic2.it` → `:7032` (web) · host esistenti invariati (`:3000`) · catch-all → `:5000` (comportamento attuale preservato) |
+| DNS | CNAME `preape.cheic2.it` → tunnel `83db7f73…` (creato via `tunnel route dns`) |
+| Processo | `cloudflared tunnel --config ~/.cloudflared/ctm.yml run ctm` (PID dal 23/09 00:34, log `ctm-run.log`, 4 connessioni registrate) |
+| Verifica | `https://preape.cheic2.it/pre-ape/` → **200**, `<base href="/pre-ape/">` ✔ |
+
+### TODO operativi emersi (da chiudere in P2/P3)
+- **Persistenza reboot**: né `:7032` (python http.server) né il processo cloudflared sono servizi di sistema — servono unit systemd user (o `@reboot`) oppure il compose di `DEPLOY_PLAN` con `restart: unless-stopped` (AC-D4).
+- API (`:7031`) **non** è ancora esposta via tunnel: servirà secondo hostname (es. `preapi.cheic2.it`) o proxy `/api/v1` (previsto dalla topologia) — da decidere in fase 1 con il team appena l'API client (P1-A3) richiede la chiamata cross-origin, insieme al CORS già in lavorazione in A1.
