@@ -67,3 +67,26 @@ Scelta utente (fase 1): **server domestico + tunnel cloudflared esistente "ctm"*
 ### TODO operativi emersi (da chiudere in P2/P3)
 - **Persistenza reboot**: né `:7032` (python http.server) né il processo cloudflared sono servizi di sistema — servono unit systemd user (o `@reboot`) oppure il compose di `DEPLOY_PLAN` con `restart: unless-stopped` (AC-D4).
 - API (`:7031`) **non** è ancora esposta via tunnel: servirà secondo hostname (es. `preapi.cheic2.it`) o proxy `/api/v1` (previsto dalla topologia) — da decidere in fase 1 con il team appena l'API client (P1-A3) richiede la chiamata cross-origin, insieme al CORS già in lavorazione in A1.
+
+## 🔧 Fix ownership tunnel `ctm` (23/09/26, ~01:10 CEST) — "ctm si riavvia di continuo"
+
+Tre attori contendevano lo stesso tunnel `83db7f73` (da cui dipende preape.cheic2.it):
+
+| # | Attore | Problema |
+|---|---|---|
+| 1 | servizio utente `cloudflared-ctm.service` | puntava alla vecchia `ctm-redirect.yml` (ingress invalido: catch-all in posizione 3) → cloudflared rifiuta di partire → `Restart=every 5s`: **75.942 crash** ripetuti dal 18/09 |
+| 2 | istanza "manuale" nohup (avviata con la fix di ieri, config `ctm.yml` corretta) | proprietario di fatto del traffico, ma duplicato rispetto a1 |
+| 3 | manager **CTM** (`ctm.service` → `manage_tunnels.py`) | watchdog ogni 30s sul PID storico 2509385 (ucciso ieri): "Tunnel caduto → Riavvio…" a vuoto, 64+ cicli + spam Telegram |
+
+Correzioni applicate (file **esterni** al repo, backup `*.bak-20260923` / `.bak`):
+1. Unità utente → `ExecStart=… --config ~/.cloudflared/ctm.yml run ctm`, `enabled` + `Linger=yes` (sopravvive al reboot): oggi è l'unico processo ctm attivo (1 istanza, 4 connessioni, WAN 200).
+2. `data/state.json → tunnels.ctm.pid` → PID reale: watchdog silenzioso da subito (ferma il loop e lo spam Telegram).
+3. `manage_tunnels.py` patchato (effetto al **prossimo restart del manager = prossimo reboot**, senza sudo non si può riavviare ora):
+   - branch "tunnel già in esecuzione" ora **adotta il PID reale** nello state (chiude il bug alla radice);
+   - se `tunnels.json` dichiara `config`, il spawn usa `--config` invece del catch-all `--url` → **senza questa patch, al reboot** `start_autostart_tunnels()` (che uccide *tutti* i cloudflared) avrebbe rilanciato ctm in modalità `--url` e spezzato `preape → :7032`.
+4. `data/tunnels.json` entry ctm → `"config": "/home/francesco/.cloudflared/ctm.yml"`.
+
+### TODO restanti (ordine)
+1. **Proprietario unico**: al prossimo reboot il manager patchato rilancia ctm con la config corretta → `systemctl --user disable --now cloudflared-ctm.service` (o subito, con sudo: `sudo systemctl restart ctm.service` e poi disabilitare l'unità utente). Fine stato: proprietario unico = manager CTM.
+2. Timer morto: `cloudflare-tunnels.timer` invoca `/usr/local/bin/start_tunnels.sh` (inesistente) → `sudo systemctl disable --now cloudflare-tunnels.timer`.
+3. cloudflared 2026.2.0 → 2026.9.1 (warning upstream): upgrade differito, riguarda tutti i tunnel.
