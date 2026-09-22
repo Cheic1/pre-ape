@@ -1,7 +1,8 @@
-// Web-only Geolocation + Nominatim reverse geocoding using package:web + dart:js_interop.
+// Web-only Geolocation + Nominatim geocoding using package:web + dart:js_interop.
 // Only imported on web builds via the conditional import pattern.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
@@ -68,6 +69,40 @@ Future<String?> reverseGeocode(double lat, double lng) async {
     if (valEnd <= valStart) return null;
     final display = text.substring(valStart, valEnd);
     return display.isNotEmpty ? display : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Forward geocode: turn a typed address (e.g. "Via Roma 1, Milano") into
+/// coordinates + canonical display name via Nominatim `/search`.
+/// Returns null when nothing is found or the request fails.
+Future<({double lat, double lng, String name})?> forwardGeocode(
+    String query) async {
+  try {
+    final q = Uri.encodeComponent(query);
+    final url = 'https://nominatim.openstreetmap.org/search'
+        '?format=jsonv2&limit=1&accept-language=it&q=$q';
+
+    final resp = await web.window
+        .fetch(url.toJS, web.RequestInit(method: 'GET'))
+        .toDart;
+
+    if (!resp.ok) return null;
+
+    final text = (await resp.text().toDart).toDart;
+    final decoded = jsonDecode(text);
+    if (decoded is! List || decoded.isEmpty) return null;
+    final first = decoded.first;
+    if (first is! Map) return null;
+
+    final lat = (first['lat'] as num?)?.toDouble();
+    final lng = (first['lon'] as num?)?.toDouble();
+    final name = first['display_name'] as String?;
+    if (lat == null || lng == null || name == null || name.isEmpty) {
+      return null;
+    }
+    return (lat: lat, lng: lng, name: name);
   } catch (_) {
     return null;
   }

@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
+import 'package:pre_ape/features/onboarding/web_geolocation_stub.dart'
+    if (dart.library.js_interop) 'package:pre_ape/features/onboarding/web_geolocation.dart';
+import 'package:pre_ape/features/onboarding/web_map_widget_stub.dart'
+    if (dart.library.js_interop) 'package:pre_ape/features/onboarding/web_map_widget.dart';
 
 class Step1GeneralData extends ConsumerStatefulWidget {
   const Step1GeneralData({super.key});
@@ -16,6 +19,22 @@ class Step1GeneralData extends ConsumerStatefulWidget {
 
 class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
   bool _locationInitiated = false;
+  late final TextEditingController _addressController;
+  late final FocusNode _addressFocus;
+
+  @override
+  void initState() {
+    super.initState();
+    _addressController = TextEditingController();
+    _addressFocus = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _addressFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +49,13 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
 
     final survey = ref.watch(surveyProvider).data;
 
+    // Keep the text field in sync with the provider, unless the user is
+    // currently typing in it (so GPS/map results never clobber keystrokes).
+    if (!_addressFocus.hasFocus &&
+        _addressController.text != (survey.address ?? '')) {
+      _addressController.text = survey.address ?? '';
+    }
+
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
@@ -40,6 +66,24 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
         const SizedBox(height: AppSpacing.xl),
 
         _buildAddressField(context, ref, survey),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Scrivi l\'indirizzo e premi la lente per cercarlo, oppure seleziona un punto sulla mappa.',
+          style: AppTextStyles.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // Interactive Leaflet/OpenStreetMap (web only).
+        if (kIsWeb)
+          SizedBox(
+            height: 300,
+            child: WebMapWidget(
+              latitude: survey.latitude,
+              longitude: survey.longitude,
+              onPointSelected: (lat, lng) => _onMapPointSelected(ref, lat, lng),
+            ),
+          ),
+
         const SizedBox(height: AppSpacing.lg),
 
         _buildMqSlider(ref, survey),
@@ -64,7 +108,7 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
         Text('Indirizzo', style: AppTextStyles.labelLarge),
         const SizedBox(height: AppSpacing.sm),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
           decoration: BoxDecoration(
             color: AppColors.surfaceElevated,
             borderRadius: BorderRadius.circular(AppRadius.md),
@@ -72,30 +116,58 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
           ),
           child: Row(
             children: [
-              Icon(
-                survey.locating ? Icons.hourglass_empty : Icons.location_on_outlined,
-                color: survey.locating ? AppColors.primary : AppColors.textMuted,
-                size: 20,
+              Padding(
+                padding: const EdgeInsets.only(left: AppSpacing.xs),
+                child: Icon(
+                  survey.locating
+                      ? Icons.hourglass_empty
+                      : Icons.location_on_outlined,
+                  color:
+                      survey.locating ? AppColors.primary : AppColors.textMuted,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: survey.locating
-                    ? Text(
-                        'Rilevamento posizione…',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.textMuted,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      )
-                    : Text(
-                        survey.address ?? 'Seleziona indirizzo sulla mappa',
-                        style: AppTextStyles.bodyMedium,
-                      ),
+                child: TextField(
+                  controller: _addressController,
+                  focusNode: _addressFocus,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _searchAddress(ref),
+                  style: AppTextStyles.bodyMedium,
+                  decoration: InputDecoration(
+                    hintText: survey.locating
+                        ? 'Rilevamento posizione…'
+                        : 'Via Roma 1, Milano…',
+                    hintStyle: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textMuted,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    isDense: true,
+                    border: InputBorder.none,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
               ),
               IconButton(
-                onPressed: () => _openAddressEditor(context, ref, survey),
-                icon: const Icon(Icons.edit_outlined,
+                tooltip: 'Cerca indirizzo sulla mappa',
+                onPressed: () => _searchAddress(ref),
+                icon: const Icon(Icons.search,
                     color: AppColors.primary, size: 20),
+              ),
+              IconButton(
+                tooltip: 'Usa la mia posizione',
+                onPressed:
+                    survey.locating ? null : () => _useMyLocation(ref),
+                icon: survey.locating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location,
+                        color: AppColors.primary, size: 20),
               ),
             ],
           ),
@@ -104,152 +176,58 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
     );
   }
 
-  // ── Address editor dialog ──────────────────────────────────────────
+  /// Forward geocode the typed address: moves the map marker and replaces the
+  /// text with the canonical address returned by Nominatim.
+  Future<void> _searchAddress(WidgetRef ref) async {
+    final query = _addressController.text.trim();
+    if (query.isEmpty) return;
 
-  void _openAddressEditor(
-      BuildContext context, WidgetRef ref, SurveyData survey) {
-    final controller = TextEditingController(text: survey.address ?? '');
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Indirizzo edificio'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Manual text entry
-              TextField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  hintText: 'Via Roma 1, Milano',
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
+    final result = await forwardGeocode(query);
+    if (!mounted) return;
 
-              // Geolocation button (web only)
-              if (kIsWeb)
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    Navigator.of(ctx).pop();
-                    await ref
-                        .read(surveyProvider.notifier)
-                        .fetchLocation();
-                    // If no address was resolved, show coordinates as fallback.
-                    if (context.mounted) {
-                      final s = ref.read(surveyProvider).data;
-                      if (s.address == null && !s.locating) {
-                        ref.read(surveyProvider.notifier).updateAddress(
-                              '${s.latitude.toStringAsFixed(5)}, ${s.longitude.toStringAsFixed(5)}',
-                            );
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.my_location, size: 18),
-                  label: const Text('Usa la mia posizione'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.border),
-                  ),
-                ),
-
-              if (kIsWeb) const SizedBox(height: AppSpacing.sm),
-
-              // Open OSM map (web only)
-              if (kIsWeb)
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final lat = survey.latitude;
-                    final lng = survey.longitude;
-                    await _openOsmMap(lat, lng);
-                  },
-                  icon: const Icon(Icons.map_outlined, size: 18),
-                  label: const Text('Apri mappa e importa punto'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.border),
-                  ),
-                ),
-            ],
-          ),
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Indirizzo non trovato: prova a selezionarlo sulla mappa.'),
+          backgroundColor: AppColors.surfaceElevated,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Annulla'),
-          ),
-          TextButton(
-            onPressed: () {
-              ref
-                  .read(surveyProvider.notifier)
-                  .updateAddress(controller.text);
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Salva'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Open OpenStreetMap at the current coordinates to let the user pick a point.
-  /// After the user clicks a location on OSM, they copy the coordinates from
-  /// the URL hash (e.g. #map=17/41.90280/12.49640) and paste them back via a
-  /// small import dialog that appears after the map opens.
-  Future<void> _openOsmMap(double lat, double lng) async {
-    final uri = Uri.parse(
-      'https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=17/$lat/$lng',
-    );
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      );
+      return;
     }
 
-    // Small delay to let the external browser open, then prompt.
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-    _promptImportOsmCoordinates(context, ref, lat, lng);
+    ref
+        .read(surveyProvider.notifier)
+        .updateLatLng(result.lat, result.lng);
+    ref.read(surveyProvider.notifier).updateAddress(result.name);
+    _addressController.text = result.name;
+    _addressController.selection =
+        TextSelection.collapsed(offset: result.name.length);
   }
 
-  void _promptImportOsmCoordinates(
-      BuildContext context, WidgetRef ref, double lat, double lng) {
-    final controller =
-        TextEditingController(text: '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}');
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Importa coordinate da OSM'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Incolla lat, lng (es. 41.902800, 12.496400)',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Annulla'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final parts = controller.text.split(',');
-              if (parts.length >= 2) {
-                final lat_ = double.tryParse(parts[0].trim());
-                final lng_ = double.tryParse(parts[1].trim());
-                if (lat_ != null && lng_ != null) {
-                  ref.read(surveyProvider.notifier).updateLatLng(lat_, lng_);
-                  final addr = await reverseGeocode(lat_, lng_);
-                  if (addr != null && addr.isNotEmpty) {
-                    ref.read(surveyProvider.notifier).updateAddress(addr);
-                  }
-                }
-              }
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-            child: const Text('Importa'),
-          ),
-        ],
-      ),
-    );
+  /// Explicit GPS button: force a fresh geolocation + reverse geocode.
+  Future<void> _useMyLocation(WidgetRef ref) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await ref.read(surveyProvider.notifier).fetchLocation(force: true);
+    if (!mounted) return;
+    final s = ref.read(surveyProvider).data;
+    if (s.address == null && !s.locating) {
+      ref.read(surveyProvider.notifier).updateAddress(
+            '${s.latitude.toStringAsFixed(5)}, ${s.longitude.toStringAsFixed(5)}',
+          );
+    }
+  }
+
+  /// Called when the user taps or drags on the embedded map.
+  /// Updates lat/lng in the provider and attempts reverse geocoding.
+  void _onMapPointSelected(WidgetRef ref, double lat, double lng) {
+    ref.read(surveyProvider.notifier).updateLatLng(lat, lng);
+    // Best-effort reverse geocoding – non-blocking failure.
+    reverseGeocode(lat, lng).then((addr) {
+      if (addr != null && addr.isNotEmpty && mounted) {
+        ref.read(surveyProvider.notifier).updateAddress(addr);
+      }
+    });
   }
 
   // ── Sliders ────────────────────────────────────────────────────────
@@ -324,7 +302,7 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
             TextButton.icon(
               onPressed: () => _promptManualHeight(context, ref, survey),
               icon: const Icon(Icons.edit, size: 16),
-              label: const Text('Inserisci manually'),
+              label: const Text('Inserisci manualmente'),
             ),
             const Spacer(),
             const Text('4 m', style: AppTextStyles.bodySmall),

@@ -12,3 +12,7 @@ Future<({double lat, double lng})> fetchBrowserGeolocation({
 }
 
 Future<String?> reverseGeocode(double lat, double lng) async => null;
+
+Future<({double lat, double lng, String name})?> forwardGeocode(
+    String query) async =>
+    null;

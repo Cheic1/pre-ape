@@ -36,6 +36,10 @@ class SurveyData {
   String? generatorType;
   List<String>? photoPaths;
 
+  /// Photos captured for the survey, keyed by slot label
+  /// (e.g. 'Facciata') and valued as a base64 data-URL.
+  Map<String, String> photos = {};
+
   SurveyData copyWith({
     String? address,
     double? squareMeters,
@@ -49,9 +53,11 @@ class SurveyData {
     String? heatingType,
     String? generatorType,
     List<String>? photoPaths,
+    Map<String, String>? photos,
   }) {
     return SurveyData()
       ..address = address ?? this.address
+      ..photos = photos ?? this.photos
       ..squareMeters = squareMeters ?? this.squareMeters
       ..avgHeight = avgHeight ?? this.avgHeight
       ..latitude = latitude ?? this.latitude
@@ -121,6 +127,20 @@ class SurveyNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Attach (or replace) the photo for a slot label.
+  void updatePhoto(String slot, String dataUrl) {
+    _data = _data.copyWith(photos: {..._data.photos, slot: dataUrl});
+    notifyListeners();
+  }
+
+  /// Remove the photo stored for a slot label, if any.
+  void removePhoto(String slot) {
+    if (!_data.photos.containsKey(slot)) return;
+    final updated = {..._data.photos}..remove(slot);
+    _data = _data.copyWith(photos: updated);
+    notifyListeners();
+  }
+
   void nextStep() {
     if (_currentStep < 4) {
       _currentStep++;
@@ -139,9 +159,10 @@ class SurveyNotifier extends ChangeNotifier {
   /// and reverse-geocode them through Nominatim.  On failure, silently keeps
   /// the Italy default so the survey can proceed without blocking the user.
   ///
-  /// Safe to call multiple times; only the first invocation triggers the flow.
-  Future<void> fetchLocation() async {
-    if (_locationFetched) return;
+  /// Safe to call multiple times; only the first invocation triggers the flow
+  /// unless [force] is true (explicit "Usa la mia posizione" button press).
+  Future<void> fetchLocation({bool force = false}) async {
+    if (_locationFetched && !force) return;
     _locationFetched = true;
     if (!kIsWeb) return;
 
