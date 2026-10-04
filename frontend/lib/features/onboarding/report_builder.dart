@@ -70,6 +70,7 @@ String buildReportHtml(SurveyData s) {
            font-weight: 700; border-radius: 8px; padding: 4px 12px; }
   .photos { display: flex; flex-wrap: wrap; gap: 12px; }
   .note { font-size: 12px; color: #667085; margin: 8px 0 0; }
+  .notes { white-space: pre-wrap; font-size: 14px; }
   figure { margin: 0; width: 160px; }
   figure img { width: 160px; height: 120px; object-fit: cover;
                border-radius: 8px; border: 1px solid #e2e5ea; }
@@ -84,6 +85,12 @@ String buildReportHtml(SurveyData s) {
 <div class="card">
   <h1>Pre-APE – Rilievo dati</h1>
   <div class="sub">Certificazione energetica · $date</div>
+
+  <h2>Pratica</h2>
+  <table>
+    <tr><td>Riferimento</td><td>${_esc(s.title)}</td></tr>
+    <tr><td>Cliente</td><td>${_esc(s.clientName)}</td></tr>
+  </table>
 
   <h2>Edificio</h2>
   <table>
@@ -118,6 +125,9 @@ String buildReportHtml(SurveyData s) {
 
   <h2>Foto aggiuntive</h2>
   ${additionalValid.isEmpty ? '<p>Nessuna foto aggiuntiva.</p>' : '<div class="photos">\n$additionalSections\n</div>'}
+
+  <h2>Note del tecnico</h2>
+  <p class="notes">${_esc(s.notes)}</p>
 
   <div class="footer">
     Documento generato da Pre-APE – stima preliminare ai fini del sopralluogo.

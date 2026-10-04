@@ -1,6 +1,7 @@
 /// HTTP client per l'API Pre-APE v1 – contratto: `docs/openapi.snapshot.json`.
 ///
-/// * JWT in **memoria** (`_token`): nessuna persistenza a piattaforma ad oggi.
+/// * JWT in memoria (`_token`); la persistenza tra sessioni è compito di
+///   `AuthNotifier` (shared_preferences) che lo ripristina con [setToken].
 /// * Header `Authorization: Bearer <token>` su ogni chiamata autenticata.
 /// * Timeout unico su ogni chiamata → [ApiTimeoutException].
 /// * Error mapping del dettaglio FastAPI `{"detail": ...}`:
@@ -64,8 +65,25 @@ class ApiClient {
     this.timeout = const Duration(seconds: 15),
   }) : _client = client ?? http.Client();
 
-  /// Backend canonico (M9 lo esporrà dietro il reverse proxy `/api/v1`).
+  /// Backend di sviluppo locale.
   static const String defaultBaseUrl = 'http://localhost:7031';
+
+  /// URL del backend per l'app reale:
+  /// 1. `--dart-define=API_BASE_URL=https://...` se impostato in build;
+  /// 2. sul web, la stessa origine della pagina (immagine Docker unica:
+  ///    l'API serve anche l'app, quindi niente CORS);
+  /// 3. altrimenti [defaultBaseUrl].
+  static String resolveBaseUrl({required bool isWeb, Uri? pageUri}) {
+    const fromDefine = String.fromEnvironment('API_BASE_URL');
+    if (fromDefine.isNotEmpty) return _trimSlash(fromDefine);
+    if (isWeb && pageUri != null && pageUri.hasAuthority) {
+      return _trimSlash(pageUri.origin);
+    }
+    return defaultBaseUrl;
+  }
+
+  static String _trimSlash(String url) =>
+      url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 
   static const String _apiPrefix = '/api/v1';
 
@@ -81,6 +99,9 @@ class ApiClient {
   bool get isAuthenticated => _token != null;
 
   void logout() => _token = null;
+
+  /// Ripristina un JWT salvato (sessione persistente).
+  void setToken(String? token) => _token = token;
 
   // ---------------------------------------------------------------------------
   // Auth
@@ -128,6 +149,23 @@ class ApiClient {
     return SurveyRead.fromJson(json);
   }
 
+  /// `GET /api/v1/surveys` → 200, survey del chiamante (più recenti prima).
+  Future<List<SurveySummary>> listSurveys() async {
+    final json = await _requestAny('GET', '$_apiPrefix/surveys');
+    if (json is! List) {
+      throw ApiException(200, 'Risposta inattesa dal server (GET /surveys)');
+    }
+    return json
+        .whereType<Map<String, dynamic>>()
+        .map(SurveySummary.fromJson)
+        .toList(growable: false);
+  }
+
+  /// `DELETE /api/v1/surveys/{id}` → 204 | 404.
+  Future<void> deleteSurvey(String id) async {
+    await _requestAny('DELETE', '$_apiPrefix/surveys/$id');
+  }
+
   /// `GET /api/v1/surveys/{id}` → 200 | 404.
   Future<SurveyRead> getSurvey(String id) async {
     final json = await _request('GET', '$_apiPrefix/surveys/$id');
@@ -161,6 +199,24 @@ class ApiClient {
     Object? body,
     bool authenticated = true,
   }) async {
+    final payload = await _requestAny(
+      method,
+      path,
+      body: body,
+      authenticated: authenticated,
+    );
+    if (payload is Map<String, dynamic>) return payload;
+    throw ApiException(200, 'Risposta non JSON dal server ($method $path)');
+  }
+
+  /// Come [_request] ma restituisce il JSON grezzo (lista, mappa o `null`
+  /// per le risposte vuote, es. 204).
+  Future<Object?> _requestAny(
+    String method,
+    String path, {
+    Object? body,
+    bool authenticated = true,
+  }) async {
     final uri = Uri.parse('$baseUrl$path');
     final headers = _headers(authenticated: authenticated);
     final encoded = body == null ? null : jsonEncode(body);
@@ -172,6 +228,8 @@ class ApiClient {
       pending = _client.post(uri, headers: headers, body: encoded);
     } else if (method == 'PUT') {
       pending = _client.put(uri, headers: headers, body: encoded);
+    } else if (method == 'DELETE') {
+      pending = _client.delete(uri, headers: headers);
     } else {
       throw ApiException(0, 'Metodo non supportato: $method');
     }
@@ -187,16 +245,20 @@ class ApiClient {
       throw ApiException(0, 'Errore di rete: ${e.message}');
     }
 
-    final Object? payload = response.body.isEmpty
-        ? null
-        : jsonDecode(response.body) as Object?;
+    Object? payload;
+    if (response.body.isNotEmpty) {
+      try {
+        payload = jsonDecode(response.body) as Object?;
+      } on FormatException {
+        throw ApiException(
+          response.statusCode,
+          'Risposta non JSON dal server ($method $path)',
+        );
+      }
+    }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      if (payload is Map<String, dynamic>) return payload;
-      throw ApiException(
-        response.statusCode,
-        'Risposta non JSON dal server ($method $path)',
-      );
+      return payload;
     }
     throw _exceptionFor(response.statusCode, payload);
   }

@@ -18,16 +18,19 @@ Authentication
   /auth/* is rate limited: AUTH_RATE_LIMIT_PER_MINUTE per client IP per 60 s -> 429.
 
 Resource: Survey (JSON)
-  {id: uuid, address?, latitude?, longitude?, square_meters?, avg_height?,
-   climate_zone?, wall_thickness?, window_frame?, window_glass?, heating_type?,
-   generator_type?, generator_power_kw?, generator_year?, estimated_class?,
-   energy_score?, status: "draft" | "completed" | "exported",
+  {id: uuid, title?, client_name?, notes?, address?, latitude?, longitude?,
+   square_meters?, avg_height?, climate_zone?, wall_thickness?, window_frame?,
+   window_glass?, heating_type?, generator_type?, generator_power_kw?,
+   generator_year?, photos?: {slot: data-URL}, additional_photos?: [data-URL],
+   estimated_class?, energy_score?, status: "draft" | "completed" | "exported",
    created_at: datetime, updated_at: datetime}
-  estimated_class / energy_score are computed fields: read-only through the API
-  for now (scoring pipeline lands later; see TEAM_REVIEW roadmap); sending them
-  to POST/PUT /surveys -> 422 (input models use extra="forbid").
+  estimated_class / energy_score are computed by the server on every
+  create/update (app.core.scoring, same formula as the Flutter client): sending
+  them to POST/PUT /surveys -> 422 (input models use extra="forbid").
+  Photos are data:image/(jpeg|png|webp);base64 URLs, capped per photo and count.
 
 Endpoints (path ids are UUIDs -> 422 when malformed, per-field validation)
+  GET    /api/v1/surveys                     -> 200 [SurveySummary] (caller's, newest first)
   POST   /api/v1/surveys                     -> 201 Survey (stored with user_id = caller)
   GET    /api/v1/surveys/{id}                -> 200 Survey | 404
   PUT    /api/v1/surveys/{id}                -> 200 Survey | 404
@@ -48,15 +51,16 @@ from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks, 
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from typing import List, Optional, Dict, Any
+from typing import List, Literal, Optional, Dict, Any
 from uuid import UUID
 import uuid
 import asyncio
 import logging
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.rate_limit import auth_rate_limiter, client_ip
+from app.core.scoring import compute_score, energy_class_for_score
 from app.core.security import (
     create_access_token,
     decode_token,
@@ -179,30 +183,89 @@ def get_current_user(
     return user
 
 # API Schemas
+# Photo limits (MVP: photos travel inline as data-URLs and are stored in the
+# survey row). The client already downsizes to ~1600px / JPEG q0.82 (~500 KB).
+MAX_PHOTO_DATA_URL_CHARS = 1_000_000  # ~730 KB decoded
+MAX_PHOTO_SLOTS = 8
+MAX_ADDITIONAL_PHOTOS = 6
+_ALLOWED_PHOTO_PREFIXES = (
+    "data:image/jpeg;base64,",
+    "data:image/png;base64,",
+    "data:image/webp;base64,",
+)
+
+
+def _check_photo(value: str) -> str:
+    if not isinstance(value, str) or not value.startswith(_ALLOWED_PHOTO_PREFIXES):
+        raise ValueError("photo must be a data:image/(jpeg|png|webp);base64 URL")
+    if len(value) > MAX_PHOTO_DATA_URL_CHARS:
+        raise ValueError("photo too large")
+    return value
+
+
+SurveyStatus = Literal["draft", "completed", "exported"]
+
+
 class SurveyBase(BaseModel):
-    address: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    square_meters: Optional[float] = None
-    avg_height: Optional[float] = None
-    climate_zone: Optional[str] = None
-    wall_thickness: Optional[str] = None
-    window_frame: Optional[str] = None
-    window_glass: Optional[str] = None
-    heating_type: Optional[str] = None
-    generator_type: Optional[str] = None
-    generator_power_kw: Optional[float] = None
-    generator_year: Optional[int] = None
+    title: Optional[str] = Field(default=None, max_length=255)
+    client_name: Optional[str] = Field(default=None, max_length=255)
+    notes: Optional[str] = Field(default=None, max_length=10_000)
+    address: Optional[str] = Field(default=None, max_length=512)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    square_meters: Optional[float] = Field(default=None, ge=0, le=100_000)
+    avg_height: Optional[float] = Field(default=None, ge=0, le=100)
+    climate_zone: Optional[str] = Field(default=None, max_length=10)
+    wall_thickness: Optional[str] = Field(default=None, max_length=20)
+    window_frame: Optional[str] = Field(default=None, max_length=20)
+    window_glass: Optional[str] = Field(default=None, max_length=20)
+    heating_type: Optional[str] = Field(default=None, max_length=50)
+    generator_type: Optional[str] = Field(default=None, max_length=50)
+    generator_power_kw: Optional[float] = Field(default=None, ge=0)
+    generator_year: Optional[int] = Field(default=None, ge=1900, le=2100)
+    photos: Optional[Dict[str, str]] = None
+    additional_photos: Optional[List[str]] = None
+    status: Optional[SurveyStatus] = None
 
-class SurveyCreate(SurveyBase):
-    """Input create: self-describing contract — unknown keys are rejected with
-    422 instead of being silently dropped, in particular the computed fields
-    ``estimated_class`` / ``energy_score`` (read-only, M1)."""
+
+class _SurveyInput(SurveyBase):
+    """Input create/update: self-describing contract — unknown keys are
+    rejected with 422 instead of being silently dropped, in particular the
+    computed fields ``estimated_class`` / ``energy_score`` (read-only, M1)."""
     model_config = ConfigDict(extra="forbid")
 
-class SurveyUpdate(SurveyBase):
-    """Input update: same strict contract as SurveyCreate (M1)."""
-    model_config = ConfigDict(extra="forbid")
+    @field_validator("photos")
+    @classmethod
+    def _validate_photos(cls, value):
+        if value is None:
+            return value
+        if len(value) > MAX_PHOTO_SLOTS:
+            raise ValueError(f"at most {MAX_PHOTO_SLOTS} photo slots")
+        for slot, photo in value.items():
+            if not slot or len(slot) > 40:
+                raise ValueError("photo slot label must be 1-40 chars")
+            _check_photo(photo)
+        return value
+
+    @field_validator("additional_photos")
+    @classmethod
+    def _validate_additional(cls, value):
+        if value is None:
+            return value
+        if len(value) > MAX_ADDITIONAL_PHOTOS:
+            raise ValueError(f"at most {MAX_ADDITIONAL_PHOTOS} additional photos")
+        for photo in value:
+            _check_photo(photo)
+        return value
+
+
+class SurveyCreate(_SurveyInput):
+    pass
+
+
+class SurveyUpdate(_SurveyInput):
+    pass
+
 
 class SurveyResponse(SurveyBase):
     id: UUID
@@ -212,8 +275,39 @@ class SurveyResponse(SurveyBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SurveySummary(BaseModel):
+    """Lightweight row for GET /surveys (no photo payloads)."""
+    id: UUID
+    title: Optional[str] = None
+    client_name: Optional[str] = None
+    address: Optional[str] = None
+    square_meters: Optional[float] = None
+    estimated_class: Optional[str] = None
+    energy_score: Optional[float] = None
+    status: str
+    photo_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+def _photo_count(survey: Survey) -> int:
+    return len(survey.photos or {}) + len(survey.additional_photos or [])
+
+
+def _apply_score(survey: Survey) -> None:
+    """Server-side score: same formula as the Flutter client (app.core.scoring)."""
+    score = compute_score(
+        square_meters=survey.square_meters,
+        wall_thickness=survey.wall_thickness,
+        window_frame=survey.window_frame,
+        window_glass=survey.window_glass,
+        heating_type=survey.heating_type,
+    )
+    survey.energy_score = score
+    survey.estimated_class = energy_class_for_score(score)
 
 class PhotoAnalysisBase(BaseModel):
     survey_id: UUID
@@ -234,8 +328,7 @@ class PhotoAnalysisResponse(PhotoAnalysisBase):
     id: UUID
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ---------------------------------------------------------------------------
 # Auth endpoints (rate limited)
@@ -328,8 +421,9 @@ async def create_survey(
     db_survey = Survey(
         id=uuid.uuid4(),
         user_id=current_user.id,
-        **survey.model_dump(exclude_unset=True),
+        **survey.model_dump(exclude_unset=True, exclude_none=True),
     )
+    _apply_score(db_survey)
     db.add(db_survey)
     db.commit()
     db.refresh(db_survey)
@@ -340,6 +434,35 @@ async def create_survey(
 
     logger.info(f"Created survey with ID: {db_survey.id} for user {current_user.id}")
     return db_survey
+
+@router.get("/surveys", response_model=List[SurveySummary])
+async def list_surveys(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Caller's surveys, most recently updated first (no photo payloads)."""
+    surveys = (
+        db.query(Survey)
+        .filter(Survey.user_id == current_user.id)
+        .order_by(Survey.updated_at.desc())
+        .all()
+    )
+    return [
+        SurveySummary(
+            id=s.id,
+            title=s.title,
+            client_name=s.client_name,
+            address=s.address,
+            square_meters=s.square_meters,
+            estimated_class=s.estimated_class,
+            energy_score=s.energy_score,
+            status=s.status or "draft",
+            photo_count=_photo_count(s),
+            created_at=s.created_at,
+            updated_at=s.updated_at,
+        )
+        for s in surveys
+    ]
 
 @router.get("/surveys/{survey_id}", response_model=SurveyResponse)
 async def get_survey(
@@ -371,8 +494,11 @@ async def update_survey(
 
     update_data = survey_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
+        if key == "status" and value is None:
+            continue  # status is NOT NULL in practice: null means "unchanged"
         setattr(survey, key, value)
 
+    _apply_score(survey)
     survey.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(survey)
@@ -391,6 +517,7 @@ async def delete_survey(
     if not survey:
         raise HTTPException(status_code=404, detail="Survey not found")
 
+    db.query(PhotoAnalysis).filter(PhotoAnalysis.survey_id == survey.id).delete()
     db.delete(survey)
     db.commit()
     return None
@@ -456,7 +583,7 @@ async def get_survey_results(
         "survey_id": str(survey.id),
         "estimated_class": survey.estimated_class,
         "energy_score": survey.energy_score,
-        "final_score": (survey.energy_score or 0) * 1.5,
+        "final_score": survey.energy_score or 0.0,
         "geo_location": {
             "address": survey.address,
             "latitude": survey.latitude,
@@ -475,7 +602,7 @@ async def get_survey_results(
             "generator_power_kw": survey.generator_power_kw,
             "generator_year": survey.generator_year
         },
-        "photo_count": len(survey.photo_paths) if survey.photo_paths else 0,
+        "photo_count": _photo_count(survey),
         "status": survey.status,
         "created_at": survey.created_at,
         "updated_at": survey.updated_at

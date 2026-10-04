@@ -39,7 +39,9 @@ class Settings(BaseSettings):
     # JWT
     SECRET_KEY: str = Field(default=SECRET_KEY_PLACEHOLDER)
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    # 7 days: technicians work on site for hours with no refresh-token flow
+    # yet; a 401 sends the app back to the login screen.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
     
     # AI/Vision
     AI_PROVIDER: str = Field(default="ollama", description="AI provider: ollama, openai, anthropic")

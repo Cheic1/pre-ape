@@ -462,8 +462,10 @@ class TestSurveyResults:
         data = response.json()
         assert data["survey_id"] == survey_id
         assert data["status"] == "draft"
-        assert data["estimated_class"] is None  # computed fields are read-only for now
-        assert data["final_score"] == 0.0
+        # computed server-side: 30 base + 1 (100 m²) + 10 (heat pump) = 41
+        assert data["energy_score"] == 41.0
+        assert data["estimated_class"] == "C"
+        assert data["final_score"] == 41.0
         assert data["photo_count"] == 0
         assert data["geo_location"]["address"] == "Via Roma 1, 20100 Milano MI"
         assert data["building_data"]["square_meters"] == 100.0
@@ -478,7 +480,7 @@ class TestSurveyResults:
         assert data["survey_id"] == survey_id
         assert data["estimated_class"] == "A3"
         assert data["energy_score"] == 95.0
-        assert data["final_score"] == 142.5  # 95.0 * 1.5
+        assert data["final_score"] == 95.0  # same 0-100 scale as energy_score
         assert data["status"] == "completed"
         assert data["geo_location"]["address"] == "Via Milano 1"
 
@@ -766,9 +768,9 @@ class TestInputSchemaStrictness:
         )
         assert response.status_code == 422
         assert "energy_score" in str(response.json()["detail"])
-        # no silent write: the computed field is still unset
+        # no silent write: the stored score is the server-computed one, not 95
         stored = client.get(f"/api/v1/surveys/{survey_id}", headers=headers)
-        assert stored.json()["energy_score"] is None
+        assert stored.json()["energy_score"] != 95.0
 
 
 class TestTokenSecurity:

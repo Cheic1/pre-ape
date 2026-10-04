@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pre_ape/core/scoring.dart';
+import 'package:pre_ape/models/survey.dart';
+import 'package:pre_ape/services/api_client.dart';
 
 import 'web_geolocation_stub.dart'
     if (dart.library.js_interop) 'web_geolocation.dart';
@@ -14,6 +16,17 @@ import 'web_media.dart';
 const _defaultLatLng = (lat: 41.9028, lng: 12.4964);
 
 class SurveyData {
+  /// Server id once the survey has been saved at least once (null = new).
+  String? surveyId;
+
+  /// Practice header: reference/title and client name; free-text notes.
+  String? title;
+  String? clientName;
+  String? notes;
+
+  /// `draft` | `completed` (server status).
+  String status = 'draft';
+
   String? address;
 
   /// Default 60 m² – typical apartment in Italy.
@@ -49,6 +62,11 @@ class SurveyData {
   List<String> additionalPhotos = [];
 
   SurveyData copyWith({
+    String? surveyId,
+    String? title,
+    String? clientName,
+    String? notes,
+    String? status,
     String? address,
     double? squareMeters,
     double? avgHeight,
@@ -65,6 +83,11 @@ class SurveyData {
     List<String>? additionalPhotos,
   }) {
     return SurveyData()
+      ..surveyId = surveyId ?? this.surveyId
+      ..title = title ?? this.title
+      ..clientName = clientName ?? this.clientName
+      ..notes = notes ?? this.notes
+      ..status = status ?? this.status
       ..address = address ?? this.address
       ..photos = photos ?? this.photos
       ..additionalPhotos = additionalPhotos ?? this.additionalPhotos
@@ -86,54 +109,177 @@ class SurveyNotifier extends ChangeNotifier {
   SurveyData _data = SurveyData();
   int _currentStep = 1;
   bool _locationFetched = false;
+  bool _saving = false;
+  bool _dirty = false;
 
   SurveyData get data => _data;
   int get currentStep => _currentStep;
 
+  /// True while a save request is in flight.
+  bool get saving => _saving;
+
+  /// True when there are changes not yet saved to the server.
+  bool get dirty => _dirty;
+
+  void _touch() => _dirty = true;
+
+  /// Start a brand-new survey (fresh state, GPS lookup allowed again).
+  void startNew() {
+    _data = SurveyData();
+    _data.currentScore = computeScore(_data);
+    _currentStep = 1;
+    _locationFetched = false;
+    _dirty = false;
+    notifyListeners();
+  }
+
+  /// Load a survey fetched from the server into the wizard.
+  void loadFrom(SurveyRead s) {
+    final frame = s.windowFrame;
+    final glass = s.windowGlass;
+    final data = SurveyData()
+      ..surveyId = s.id
+      ..title = s.title
+      ..clientName = s.clientName
+      ..notes = s.notes
+      ..status = s.status
+      ..address = s.address
+      ..squareMeters = s.squareMeters ?? 60.0
+      ..avgHeight = s.avgHeight ?? 2.7
+      ..latitude = s.latitude ?? _defaultLatLng.lat
+      ..longitude = s.longitude ?? _defaultLatLng.lng
+      ..wallThickness = s.wallThickness
+      ..windowType = (frame == null && glass == null)
+          ? null
+          : '${frame ?? 'Legno'} ${glass ?? 'Singolo'}'
+      ..heatingType = s.heatingType
+      ..generatorType = s.generatorType
+      ..photos = Map<String, String>.of(s.photos ?? const {})
+      ..additionalPhotos = List<String>.of(s.additionalPhotos ?? const []);
+    data.currentScore = computeScore(data);
+    _data = data;
+    _currentStep = 1;
+    // An existing survey already has its position: never overwrite it via GPS.
+    _locationFetched = true;
+    _dirty = false;
+    notifyListeners();
+  }
+
+  /// Wire DTO for POST/PUT (windowType "PVC Doppio" → frame + glass).
+  SurveyCreate toWire({String? status}) {
+    final parts = _data.windowType?.split(' ');
+    return SurveyCreate(
+      title: _data.title,
+      clientName: _data.clientName,
+      notes: _data.notes,
+      status: status,
+      address: _data.address,
+      latitude: _data.latitude,
+      longitude: _data.longitude,
+      squareMeters: _data.squareMeters,
+      avgHeight: _data.avgHeight,
+      wallThickness: _data.wallThickness,
+      windowFrame: (parts == null || parts.isEmpty) ? null : parts.first,
+      windowGlass: (parts == null || parts.length < 2) ? null : parts.last,
+      heatingType: _data.heatingType,
+      generatorType: _data.generatorType,
+      photos: _data.photos,
+      additionalPhotos: _data.additionalPhotos,
+    );
+  }
+
+  /// Save to the server (create the first time, then update).
+  ///
+  /// [complete] marks the survey as `completed`. Throws [ApiException] on
+  /// failure (state untouched, still dirty).
+  Future<void> save(ApiClient api, {bool complete = false}) async {
+    if (_saving) return;
+    _saving = true;
+    notifyListeners();
+    try {
+      final body = toWire(status: complete ? 'completed' : null);
+      final id = _data.surveyId;
+      final saved = id == null
+          ? await api.createSurvey(body)
+          : await api.updateSurvey(id, body);
+      _data = _data.copyWith(surveyId: saved.id, status: saved.status);
+      _dirty = false;
+    } finally {
+      _saving = false;
+      notifyListeners();
+    }
+  }
+
+  void updateTitle(String value) {
+    _data = _data.copyWith(title: value);
+    _touch();
+    notifyListeners();
+  }
+
+  void updateClientName(String value) {
+    _data = _data.copyWith(clientName: value);
+    _touch();
+    notifyListeners();
+  }
+
+  void updateNotes(String value) {
+    _data = _data.copyWith(notes: value);
+    _touch();
+    notifyListeners();
+  }
+
   void updateAddress(String address) {
     _data = _data.copyWith(address: address);
     _recalculateScore();
+    _touch();
     notifyListeners();
   }
 
   void updateSquareMeters(double mq) {
     _data = _data.copyWith(squareMeters: mq);
     _recalculateScore();
+    _touch();
     notifyListeners();
   }
 
   void updateAvgHeight(double height) {
     _data = _data.copyWith(avgHeight: height);
     _recalculateScore();
+    _touch();
     notifyListeners();
   }
 
   void updateLatLng(double lat, double lng) {
     _data = _data.copyWith(latitude: lat, longitude: lng);
+    _touch();
     notifyListeners();
   }
 
   void updateWallThickness(String wt) {
     _data = _data.copyWith(wallThickness: wt);
     _recalculateScore();
+    _touch();
     notifyListeners();
   }
 
   void updateWindowType(String wt) {
     _data = _data.copyWith(windowType: wt);
     _recalculateScore();
+    _touch();
     notifyListeners();
   }
 
   void updateHeatingType(String ht) {
     _data = _data.copyWith(heatingType: ht);
     _recalculateScore();
+    _touch();
     notifyListeners();
   }
 
   void updateGeneratorType(String gt) {
     _data = _data.copyWith(generatorType: gt);
     _recalculateScore();
+    _touch();
     notifyListeners();
   }
 
@@ -151,6 +297,7 @@ class SurveyNotifier extends ChangeNotifier {
     final freed = previous == null ? 0 : dataUrlBytes(previous);
     if (!_withinPhotoBudget(bytes, freedBytes: freed)) return false;
     _data = _data.copyWith(photos: {..._data.photos, slot: dataUrl});
+    _touch();
     notifyListeners();
     return true;
   }
@@ -169,6 +316,7 @@ class SurveyNotifier extends ChangeNotifier {
     _data = _data.copyWith(
       additionalPhotos: [..._data.additionalPhotos, dataUrl],
     );
+    _touch();
     notifyListeners();
     return true;
   }
@@ -180,6 +328,7 @@ class SurveyNotifier extends ChangeNotifier {
     if (index < 0 || index >= _data.additionalPhotos.length) return false;
     final updated = [..._data.additionalPhotos]..removeAt(index);
     _data = _data.copyWith(additionalPhotos: updated);
+    _touch();
     notifyListeners();
     return true;
   }
@@ -206,6 +355,7 @@ class SurveyNotifier extends ChangeNotifier {
     if (!_data.photos.containsKey(slot)) return;
     final updated = {..._data.photos}..remove(slot);
     _data = _data.copyWith(photos: updated);
+    _touch();
     notifyListeners();
   }
 

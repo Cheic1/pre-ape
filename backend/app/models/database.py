@@ -6,7 +6,16 @@ from sqlalchemy.orm import relationship, sessionmaker, declarative_base
 from app.core.config import settings
 
 # Create database engine
-engine = create_engine(settings.DATABASE_URL)
+def _normalize_db_url(url: str) -> str:
+    # Heroku-style URLs (Render, Neon dashboards) use the legacy scheme that
+    # SQLAlchemy 2 no longer accepts.
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://"):]
+    return url
+
+
+# pool_pre_ping: managed Postgres (Neon, Render) closes idle connections.
+engine = create_engine(_normalize_db_url(settings.DATABASE_URL), pool_pre_ping=True)
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -37,6 +46,11 @@ class Survey(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     
+    # Intestazione pratica (cliente / riferimento) + note libere del tecnico
+    title = Column(String(255))
+    client_name = Column(String(255))
+    notes = Column(Text)
+
     # Step 1: Dati Generali
     address = Column(String(512))
     latitude = Column(Float)
@@ -59,7 +73,11 @@ class Survey(Base):
     # Step 4: Foto
     photo_paths = Column(JSON)  # List of file paths
     photo_metadata = Column(JSON)  # AI analysis results
-    
+    # Foto guidate {slot: data-URL} + foto aggiuntive [data-URL] (MVP: inline
+    # nel DB, con cap per foto e totale lato API; object storage in futuro).
+    photos = Column(JSON)
+    additional_photos = Column(JSON)
+
     # Results
     estimated_class = Column(String(5))
     energy_score = Column(Float)

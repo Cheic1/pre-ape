@@ -32,6 +32,11 @@ library;
 /// (gli schema contrattuali `SurveyCreate` e `SurveyUpdate` sono identici).
 class SurveyCreate {
   const SurveyCreate({
+    this.title,
+    this.clientName,
+    this.notes,
+    this.status,
+    this.photos,
     this.address,
     this.latitude,
     this.longitude,
@@ -49,6 +54,11 @@ class SurveyCreate {
   });
 
   factory SurveyCreate.fromJson(Map<String, dynamic> json) => SurveyCreate(
+        title: json['title'] as String?,
+        clientName: json['client_name'] as String?,
+        notes: json['notes'] as String?,
+        status: json['status'] as String?,
+        photos: (json['photos'] as Map<String, dynamic>?)?.cast<String, String>(),
         address: json['address'] as String?,
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
@@ -66,6 +76,19 @@ class SurveyCreate {
             (json['additional_photos'] as List<dynamic>?)?.cast<String>(),
       );
 
+  /// Intestazione della pratica (es. "Pratica 12/2026") e nome del cliente.
+  final String? title;
+  final String? clientName;
+
+  /// Note libere del tecnico.
+  final String? notes;
+
+  /// `draft` | `completed` (il server rifiuta altri valori con 422).
+  final String? status;
+
+  /// Foto guidate `{slot: data-URL}` (es. `Facciata`, `Caldaia`).
+  final Map<String, String>? photos;
+
   final String? address;
   final double? latitude;
   final double? longitude;
@@ -80,14 +103,16 @@ class SurveyCreate {
   final double? generatorPowerKw;
   final int? generatorYear;
 
-  /// **Riserva contrattuale (M8)**: le foto aggiuntive non esistono ancora in
-  /// `SurveyCreate`/`SurveyUpdate` dello snapshot – finché il backend non le
-  /// espone (cambio additivo, nessun bump di versione) questo valore va
-  /// lasciato `null` e la chiave **non** viene inviata (zero invio oggi).
+  /// Foto aggiuntive (data-URL), max 6 lato server.
   final List<String>? additionalPhotos;
 
   /// Serializzazione a `snake_case`; omette i `null` (update parziale).
   Map<String, Object?> toJson() => <String, Object?>{
+        if (title != null) 'title': title,
+        if (clientName != null) 'client_name': clientName,
+        if (notes != null) 'notes': notes,
+        if (status != null) 'status': status,
+        if (photos != null) 'photos': photos,
         if (address != null) 'address': address,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
@@ -114,6 +139,10 @@ class SurveyRead {
     required this.createdAt,
     required this.updatedAt,
     this.userId,
+    this.title,
+    this.clientName,
+    this.notes,
+    this.photos,
     this.address,
     this.latitude,
     this.longitude,
@@ -138,6 +167,10 @@ class SurveyRead {
         createdAt: DateTime.parse(json['created_at'] as String),
         updatedAt: DateTime.parse(json['updated_at'] as String),
         userId: json['user_id'] as String?,
+        title: json['title'] as String?,
+        clientName: json['client_name'] as String?,
+        notes: json['notes'] as String?,
+        photos: (json['photos'] as Map<String, dynamic>?)?.cast<String, String>(),
         address: json['address'] as String?,
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
@@ -171,6 +204,11 @@ class SurveyRead {
   /// e quando il backend lo aggiungerà in modo additivo.
   final String? userId;
 
+  final String? title;
+  final String? clientName;
+  final String? notes;
+  final Map<String, String>? photos;
+
   final String? address;
   final double? latitude;
   final double? longitude;
@@ -189,8 +227,53 @@ class SurveyRead {
   final String? estimatedClass;
   final double? energyScore;
 
-  /// Riserva (M8): vedi `SurveyCreate.additionalPhotos`.
+  /// Foto aggiuntive (data-URL).
   final List<String>? additionalPhotos;
+}
+
+/// Riga di `GET /api/v1/surveys` (nessun payload foto, solo il conteggio).
+class SurveySummary {
+  const SurveySummary({
+    required this.id,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    this.title,
+    this.clientName,
+    this.address,
+    this.squareMeters,
+    this.estimatedClass,
+    this.energyScore,
+    this.photoCount = 0,
+  });
+
+  factory SurveySummary.fromJson(Map<String, dynamic> json) => SurveySummary(
+        id: json['id'] as String,
+        status: json['status'] as String? ?? 'draft',
+        createdAt: DateTime.parse(json['created_at'] as String),
+        updatedAt: DateTime.parse(json['updated_at'] as String),
+        title: json['title'] as String?,
+        clientName: json['client_name'] as String?,
+        address: json['address'] as String?,
+        squareMeters: (json['square_meters'] as num?)?.toDouble(),
+        estimatedClass: json['estimated_class'] as String?,
+        energyScore: (json['energy_score'] as num?)?.toDouble(),
+        photoCount: (json['photo_count'] as num?)?.toInt() ?? 0,
+      );
+
+  final String id;
+  final String status;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String? title;
+  final String? clientName;
+  final String? address;
+  final double? squareMeters;
+  final String? estimatedClass;
+  final double? energyScore;
+  final int photoCount;
+
+  bool get isCompleted => status == 'completed';
 }
 
 /// Risposta di `POST /api/v1/auth/register` e `POST /api/v1/auth/login`

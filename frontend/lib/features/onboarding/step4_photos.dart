@@ -8,6 +8,7 @@ import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/features/onboarding/report_builder.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
+import 'package:pre_ape/features/onboarding/survey_save.dart';
 import 'package:pre_ape/features/onboarding/web_media.dart';
 import 'package:pre_ape/features/web/web_download_stub.dart'
     if (dart.library.js_interop) 'package:pre_ape/features/web/web_download.dart';
@@ -85,6 +86,27 @@ class Step4Photos extends ConsumerWidget {
           ),
 
         const SizedBox(height: AppSpacing.xxl),
+
+        const Text('Note del tecnico', style: AppTextStyles.labelLarge),
+        const SizedBox(height: AppSpacing.sm),
+        const _NotesField(),
+
+        const SizedBox(height: AppSpacing.xl),
+
+        OutlinedButton.icon(
+          key: const ValueKey('export_report'),
+          onPressed: () => _exportReport(context, ref),
+          icon: const Icon(Icons.download),
+          label: const Text('Scarica report (HTML / PDF)'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            side: const BorderSide(color: AppColors.border),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
 
         // Bottone
         _buildNavButtons(context, ref),
@@ -280,6 +302,14 @@ class Step4Photos extends ConsumerWidget {
     }
   }
 
+  // ── Completion ───────────────────────────────────────────────────────
+
+  Future<void> _complete(BuildContext context, WidgetRef ref) async {
+    final navigator = Navigator.of(context);
+    final ok = await saveSurvey(context, ref, complete: true);
+    if (ok && navigator.canPop()) navigator.pop();
+  }
+
   // ── Navigation ───────────────────────────────────────────────────────
 
   Widget _buildNavButtons(BuildContext context, WidgetRef ref) {
@@ -307,16 +337,23 @@ class Step4Photos extends ConsumerWidget {
               boxShadow: AppShadows.glow,
             ),
             child: IconButton(
-              onPressed: () => _exportReport(context, ref),
+              key: const ValueKey('complete_survey'),
+              onPressed: ref.watch(surveyProvider.select((n) => n.saving))
+                  ? null
+                  : () => _complete(context, ref),
               icon: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.download, color: Colors.white, size: 20),
+                  Icon(Icons.check_circle_outline,
+                      color: Colors.white, size: 20),
                   SizedBox(width: 8),
-                  Text(
-                    'Esporta Report',
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w600),
+                  Flexible(
+                    child: Text(
+                      'Completa e salva',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ],
               ),
@@ -543,6 +580,62 @@ class _AdditionalPhotoThumb extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Note libere del tecnico (salvate con il sopralluogo).
+class _NotesField extends ConsumerStatefulWidget {
+  const _NotesField();
+
+  @override
+  ConsumerState<_NotesField> createState() => _NotesFieldState();
+}
+
+class _NotesFieldState extends ConsumerState<_NotesField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller =
+        TextEditingController(text: ref.read(surveyProvider).data.notes ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      key: const ValueKey('survey_notes'),
+      controller: _controller,
+      minLines: 3,
+      maxLines: 8,
+      maxLength: 10000,
+      onChanged: ref.read(surveyProvider).updateNotes,
+      decoration: InputDecoration(
+        hintText:
+            'Es. caldaia in cantina, infissi sostituiti nel 2015, accesso dal retro…',
+        filled: true,
+        fillColor: AppColors.surfaceElevated,
+        counterText: '',
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        ),
       ),
     );
   }

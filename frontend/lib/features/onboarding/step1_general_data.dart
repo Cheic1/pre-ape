@@ -21,16 +21,23 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
   bool _locationInitiated = false;
   late final TextEditingController _addressController;
   late final FocusNode _addressFocus;
+  late final TextEditingController _titleController;
+  late final TextEditingController _clientController;
 
   @override
   void initState() {
     super.initState();
     _addressController = TextEditingController();
     _addressFocus = FocusNode();
+    final data = ref.read(surveyProvider).data;
+    _titleController = TextEditingController(text: data.title ?? '');
+    _clientController = TextEditingController(text: data.clientName ?? '');
   }
 
   @override
   void dispose() {
+    _titleController.dispose();
+    _clientController.dispose();
     _addressController.dispose();
     _addressFocus.dispose();
     super.dispose();
@@ -65,6 +72,9 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
             style: AppTextStyles.bodyMedium),
         const SizedBox(height: AppSpacing.xl),
 
+        _buildPracticeFields(ref),
+        const SizedBox(height: AppSpacing.lg),
+
         _buildAddressField(context, ref, survey),
         const SizedBox(height: AppSpacing.xs),
         Text(
@@ -95,6 +105,74 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
 
         _buildNextButton(context, ref),
       ],
+    );
+  }
+
+  // ── Practice header (title + client) ────────────────────────────────
+
+  Widget _buildPracticeFields(WidgetRef ref) {
+    final notifier = ref.read(surveyProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Pratica', style: AppTextStyles.labelLarge),
+        const SizedBox(height: AppSpacing.sm),
+        _boxedField(
+          key: const ValueKey('survey_title'),
+          controller: _titleController,
+          hint: 'Riferimento pratica (es. APE 12/2026)',
+          icon: Icons.folder_outlined,
+          onChanged: notifier.updateTitle,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _boxedField(
+          key: const ValueKey('survey_client'),
+          controller: _clientController,
+          hint: 'Cliente / committente',
+          icon: Icons.person_outline,
+          onChanged: notifier.updateClientName,
+        ),
+      ],
+    );
+  }
+
+  Widget _boxedField({
+    required Key key,
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: AppSpacing.xs),
+            child: Icon(icon, color: AppColors.textMuted, size: 20),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: TextField(
+              key: key,
+              controller: controller,
+              onChanged: onChanged,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                hintText: hint,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
