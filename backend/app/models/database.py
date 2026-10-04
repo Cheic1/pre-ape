@@ -23,6 +23,8 @@ class User(Base):
     name = Column(String(255), nullable=False)
     picture = Column(Text)
     google_id = Column(String(255), unique=True, index=True)
+    # JWT login (nullable: pre-existing rows have no password until they re-register)
+    password_hash = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime)
     

@@ -7,6 +7,7 @@ import 'package:pre_ape/core/scoring.dart';
 
 import 'web_geolocation_stub.dart'
     if (dart.library.js_interop) 'web_geolocation.dart';
+import 'web_media.dart';
 
 /// Default centre of Italy (near Rome) used when the browser Geolocation
 /// API is unavailable or the user denies the permission prompt.
@@ -41,6 +42,12 @@ class SurveyData {
   /// (e.g. 'Facciata') and valued as a base64 data-URL.
   Map<String, String> photos = {};
 
+  /// Additional ("aggravating"/supporting) photos of the survey, valued as
+  /// base64 data-URLs.  Order = stable index used by
+  /// [SurveyNotifier.removeAdditionalPhoto]; capped at [kMaxAdditionalPhotos].
+  /// Never sent to the API (reserved for a later contract).
+  List<String> additionalPhotos = [];
+
   SurveyData copyWith({
     String? address,
     double? squareMeters,
@@ -55,10 +62,12 @@ class SurveyData {
     String? generatorType,
     List<String>? photoPaths,
     Map<String, String>? photos,
+    List<String>? additionalPhotos,
   }) {
     return SurveyData()
       ..address = address ?? this.address
       ..photos = photos ?? this.photos
+      ..additionalPhotos = additionalPhotos ?? this.additionalPhotos
       ..squareMeters = squareMeters ?? this.squareMeters
       ..avgHeight = avgHeight ?? this.avgHeight
       ..latitude = latitude ?? this.latitude
@@ -129,10 +138,68 @@ class SurveyNotifier extends ChangeNotifier {
   }
 
   /// Attach (or replace) the photo for a slot label.
-  void updatePhoto(String slot, String dataUrl) {
+  ///
+  /// Returns false (state untouched) when [dataUrl] is not an
+  /// `data:image/*;base64,` URL, exceeds the per-photo cap
+  /// [kMaxPhotoBytes] or would push the whole photo state over
+  /// [kMaxTotalPhotoBytes].
+  bool updatePhoto(String slot, String dataUrl) {
+    if (!isImageDataUrl(dataUrl)) return false;
+    final bytes = dataUrlBytes(dataUrl);
+    if (bytes > kMaxPhotoBytes) return false;
+    final previous = _data.photos[slot];
+    final freed = previous == null ? 0 : dataUrlBytes(previous);
+    if (!_withinPhotoBudget(bytes, freedBytes: freed)) return false;
     _data = _data.copyWith(photos: {..._data.photos, slot: dataUrl});
     notifyListeners();
+    return true;
   }
+
+  /// Add an additional photo (M4), at the end of the list.
+  ///
+  /// Returns false (state untouched) when the cap [kMaxAdditionalPhotos] is
+  /// reached or the payload fails validation (image prefix, per-photo cap,
+  /// total state cap).
+  bool addAdditionalPhoto(String dataUrl) {
+    if (_data.additionalPhotos.length >= kMaxAdditionalPhotos) return false;
+    if (!isImageDataUrl(dataUrl)) return false;
+    final bytes = dataUrlBytes(dataUrl);
+    if (bytes > kMaxPhotoBytes) return false;
+    if (!_withinPhotoBudget(bytes)) return false;
+    _data = _data.copyWith(
+      additionalPhotos: [..._data.additionalPhotos, dataUrl],
+    );
+    notifyListeners();
+    return true;
+  }
+
+  /// Remove the additional photo at [index] (stable index: remaining photos
+  /// keep their relative order).  Returns false when the index is out of
+  /// range.
+  bool removeAdditionalPhoto(int index) {
+    if (index < 0 || index >= _data.additionalPhotos.length) return false;
+    final updated = [..._data.additionalPhotos]..removeAt(index);
+    _data = _data.copyWith(additionalPhotos: updated);
+    notifyListeners();
+    return true;
+  }
+
+  /// Total decoded bytes currently held by slot + additional photos.
+  int _photoBytesUsed() {
+    var total = 0;
+    for (final photo in _data.photos.values) {
+      total += dataUrlBytes(photo);
+    }
+    for (final photo in _data.additionalPhotos) {
+      total += dataUrlBytes(photo);
+    }
+    return total;
+  }
+
+  /// True when storing [incomingBytes] (after freeing [freedBytes]) stays
+  /// within [kMaxTotalPhotoBytes].
+  bool _withinPhotoBudget(int incomingBytes, {int freedBytes = 0}) =>
+      _photoBytesUsed() - freedBytes + incomingBytes <= kMaxTotalPhotoBytes;
 
   /// Remove the photo stored for a slot label, if any.
   void removePhoto(String slot) {

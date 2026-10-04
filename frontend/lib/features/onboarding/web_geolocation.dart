@@ -96,8 +96,9 @@ Future<({double lat, double lng, String name})?> forwardGeocode(
     final first = decoded.first;
     if (first is! Map) return null;
 
-    final lat = (first['lat'] as num?)?.toDouble();
-    final lng = (first['lon'] as num?)?.toDouble();
+    // Nominatim returns lat/lon as JSON *strings* — parse robustly.
+    final lat = double.tryParse('${first['lat']}');
+    final lng = double.tryParse('${first['lon']}');
     final name = first['display_name'] as String?;
     if (lat == null || lng == null || name == null || name.isEmpty) {
       return null;

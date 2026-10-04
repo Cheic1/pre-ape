@@ -133,6 +133,11 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
                   controller: _addressController,
                   focusNode: _addressFocus,
                   textInputAction: TextInputAction.search,
+                  onChanged: (value) {
+                    // Free-typed text enters the survey immediately so the
+                    // report always has an address, even without geocoding.
+                    ref.read(surveyProvider.notifier).updateAddress(value);
+                  },
                   onSubmitted: (_) => _searchAddress(ref),
                   style: AppTextStyles.bodyMedium,
                   decoration: InputDecoration(

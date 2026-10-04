@@ -6,6 +6,8 @@ library;
 
 import 'package:pre_ape/core/scoring.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
+import 'package:pre_ape/features/onboarding/wall_thickness.dart';
+import 'package:pre_ape/features/onboarding/web_media.dart';
 
 String _esc(String? value) {
   if (value == null || value.isEmpty) return '—';
@@ -22,11 +24,27 @@ String buildReportHtml(SurveyData s) {
       '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
   final cls = energyClassForScore(s.currentScore);
 
-  final photoSections = s.photos.entries.map((e) => '''
+  // Solo data-URL immagine validati diventano `src` (mai prefissi esterni o
+  // `data:text/html`): le foto non valide vengono semplicemente ignorate.
+  final photoSections = s.photos.entries
+      .where((e) => isImageDataUrl(e.value))
+      .map((e) => '''
       <figure>
-        <img src="${e.value}" alt="${_esc(e.key)}">
+        <img src="${_esc(e.value)}" alt="${_esc(e.key)}">
         <figcaption>${_esc(e.key)}</figcaption>
-      </figure>''').join('\n');
+      </figure>''')
+      .join('\n');
+
+  final additionalValid =
+      s.additionalPhotos.where(isImageDataUrl).toList(growable: false);
+  final additionalSections = [
+    for (var i = 0; i < additionalValid.length; i++)
+      '''
+      <figure>
+        <img src="${_esc(additionalValid[i])}" alt="Foto aggiuntiva ${i + 1}">
+        <figcaption>Foto aggiuntiva ${i + 1}</figcaption>
+      </figure>''',
+  ].join('\n');
 
   return '''<!DOCTYPE html>
 <html lang="it">
@@ -51,6 +69,7 @@ String buildReportHtml(SurveyData s) {
   .badge { display: inline-block; background: #10B981; color: #fff;
            font-weight: 700; border-radius: 8px; padding: 4px 12px; }
   .photos { display: flex; flex-wrap: wrap; gap: 12px; }
+  .note { font-size: 12px; color: #667085; margin: 8px 0 0; }
   figure { margin: 0; width: 160px; }
   figure img { width: 160px; height: 120px; object-fit: cover;
                border-radius: 8px; border: 1px solid #e2e5ea; }
@@ -77,9 +96,10 @@ String buildReportHtml(SurveyData s) {
 
   <h2>Involucro</h2>
   <table>
-    <tr><td>Spessore muri</td><td>${_esc(s.wallThickness)}</td></tr>
+    <tr><td>Spessore muri</td><td>${_esc(wallThicknessReportLabel(s.wallThickness))}</td></tr>
     <tr><td>Infissi</td><td>${_esc(s.windowType)}</td></tr>
   </table>
+  <p class="note">${_esc(kWallThicknessCaption)}</p>
 
   <h2>Impianti</h2>
   <table>
@@ -95,6 +115,9 @@ String buildReportHtml(SurveyData s) {
 
   <h2>Rilievo fotografico</h2>
   ${photoSections.isEmpty ? '<p>Nessuna foto inserita.</p>' : '<div class="photos">\n$photoSections\n</div>'}
+
+  <h2>Foto aggiuntive</h2>
+  ${additionalValid.isEmpty ? '<p>Nessuna foto aggiuntiva.</p>' : '<div class="photos">\n$additionalSections\n</div>'}
 
   <div class="footer">
     Documento generato da Pre-APE – stima preliminare ai fini del sopralluogo.

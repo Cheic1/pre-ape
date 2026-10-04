@@ -4,6 +4,7 @@ import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
+import 'package:pre_ape/features/onboarding/wall_thickness.dart';
 
 class Step2Enclosure extends ConsumerWidget {
   const Step2Enclosure({super.key});
@@ -24,6 +25,12 @@ class Step2Enclosure extends ConsumerWidget {
         Text('Spessore Muri', style: AppTextStyles.labelLarge),
         const SizedBox(height: AppSpacing.md),
         _buildWallThicknessSelector(ref, survey),
+        const SizedBox(height: AppSpacing.sm),
+        // Caption normativa (mai DPR 59/2009): il valore è un proxy.
+        const Text(
+          kWallThicknessCaption,
+          style: AppTextStyles.bodySmall,
+        ),
         const SizedBox(height: AppSpacing.lg),
         
         // AR Measurement Button
@@ -61,6 +68,7 @@ class Step2Enclosure extends ConsumerWidget {
               isSelected: isSelected,
               icon: opt.icon,
               label: opt.label,
+              sublabel: wallThicknessSublabel(opt.value),
               onTap: () {
                 ref.read(surveyProvider.notifier).updateWallThickness(opt.value);
               },
@@ -95,11 +103,14 @@ class Step2Enclosure extends ConsumerWidget {
           children: [
             const Icon(Icons.straighten, color: AppColors.primary, size: 24),
             const SizedBox(width: 8),
-            const Text(
-              'Misurazione AR Spessore Muri',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                'Misurazione AR Spessore Muri',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -248,40 +259,73 @@ class _SelectorCard extends StatelessWidget {
   final bool isSelected;
   final IconData icon;
   final String label;
+
+  /// Optional secondary line (e.g. the wall-thickness range in cm); rendered
+  /// under [label] only when provided, so cards without it are unchanged.
+  final String? sublabel;
   final VoidCallback onTap;
 
   const _SelectorCard({
     required this.isSelected,
     required this.icon,
     required this.label,
+    this.sublabel,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    // Semantic boundary: label e sublabel restano nodi distinti per il screen
+    // reader ("Opzione Sottile" / "Intervallo < 30 cm") e il tap resta sul
+    // nodo della card.
+    return Semantics(
+      container: true,
+      button: true,
+      selected: isSelected,
+      label: 'Opzione $label',
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withValues(alpha: 0.15) : AppColors.surfaceElevated,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
-            width: isSelected ? 2 : 1,
-          ),
-          boxShadow: isSelected ? AppShadows.glow : null,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: isSelected ? AppColors.primary : AppColors.textMuted, size: 32),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              label,
-              style: AppTextStyles.titleMedium,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary.withValues(alpha: 0.15) : AppColors.surfaceElevated,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: isSelected ? AppColors.primary : AppColors.border,
+              width: isSelected ? 2 : 1,
             ),
-          ],
+            boxShadow: isSelected ? AppShadows.glow : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: isSelected ? AppColors.primary : AppColors.textMuted, size: 32),
+              const SizedBox(height: AppSpacing.sm),
+              // Il testo visibile è esposto dalla label della card qui sopra.
+              ExcludeSemantics(
+                child: Text(
+                  label,
+                  style: AppTextStyles.titleMedium,
+                ),
+              ),
+              if (sublabel != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Semantics(
+                  container: true,
+                  label: 'Intervallo $sublabel',
+                  child: ExcludeSemantics(
+                    child: Text(
+                      sublabel!,
+                      style: AppTextStyles.bodySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
