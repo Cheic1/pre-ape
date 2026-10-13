@@ -1,12 +1,20 @@
 import os
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, model_validator
+
+# Placeholder values that must never ship outside development (M1 fail-fast).
+SECRET_KEY_PLACEHOLDER = "your-secret-key-change-in-production"
+_PLACEHOLDER_SECRETS = frozenset({"", SECRET_KEY_PLACEHOLDER, "changeme", "change-me"})
 
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "Pre-APE"
     VERSION: str = "1.0.0"
     DEBUG: bool = False
+    APP_ENV: str = Field(
+        default="production",
+        description="deployment environment: development | staging | production"
+    )
     
     # Database
     DATABASE_URL: str = Field(
@@ -29,9 +37,11 @@ class Settings(BaseSettings):
     )
     
     # JWT
-    SECRET_KEY: str = Field(default="your-secret-key-change-in-production")
+    SECRET_KEY: str = Field(default=SECRET_KEY_PLACEHOLDER)
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    # 7 days: technicians work on site for hours with no refresh-token flow
+    # yet; a 401 sends the app back to the login screen.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
     
     # AI/Vision
     AI_PROVIDER: str = Field(default="ollama", description="AI provider: ollama, openai, anthropic")
@@ -44,8 +54,21 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = Field(default="/tmp/pre_ape_uploads")
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
     
-    # CORS
-    CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:8080", "http://localhost:7030"]
+    # CORS: dev origins + production origin by default.
+    # Env override must be a JSON list, e.g.
+    #   CORS_ORIGINS='["https://preape.cheic2.it"]'
+    CORS_ORIGINS: list[str] = Field(
+        default=[
+            "http://localhost:3000",
+            "http://localhost:8080",
+            "http://localhost:7030",
+            "https://preape.cheic2.it",
+        ],
+        description="Allowed CORS origins (JSON list when set via env)"
+    )
+
+    # Rate limiting (auth endpoints, per client IP)
+    AUTH_RATE_LIMIT_PER_MINUTE: int = 10
     
     # Email (for reports)
     SMTP_HOST: str = Field(default="smtp.gmail.com")
@@ -53,6 +76,21 @@ class Settings(BaseSettings):
     SMTP_USER: str = Field(default="")
     SMTP_PASSWORD: str = Field(default="")
     
+    @model_validator(mode="after")
+    def _fail_fast_on_placeholder_secret(self):
+        """Refuse to start with a placeholder SECRET_KEY outside development (M1).
+
+        Runs at import time (``settings = Settings()``), so a misconfigured
+        production process dies immediately instead of signing forgeable JWTs.
+        Tests opt out explicitly via ``APP_ENV=development`` (tests/conftest.py).
+        """
+        if self.APP_ENV != "development" and self.SECRET_KEY.strip() in _PLACEHOLDER_SECRETS:
+            raise ValueError(
+                "SECRET_KEY is still a placeholder: set a strong SECRET_KEY "
+                "environment variable, or run with APP_ENV=development"
+            )
+        return self
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

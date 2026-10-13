@@ -24,6 +24,7 @@ jobs:
       - run: flutter create --org com.preape --project-name pre_ape --platforms=web,android,ios .
       - run: flutter pub get
       - run: flutter analyze
+      - run: flutter test
 
   backend-test:
     runs-on: ubuntu-latest
@@ -63,7 +64,9 @@ jobs:
           channel: stable
       - run: flutter create --org com.preape --project-name pre_ape --platforms=web .
       - run: flutter pub get
-      - run: flutter build web --release --base-href /pre-ape/
+      # GitHub Pages hosts only the static app: point it at a deployed API
+      # with the repository variable API_BASE_URL (e.g. https://pre-ape.onrender.com).
+      - run: flutter build web --release --base-href /pre-ape/ --dart-define=API_BASE_URL=${{ vars.API_BASE_URL }}
       - uses: actions/upload-artifact@v4
         with:
           name: web-build
@@ -72,6 +75,13 @@ jobs:
         if: github.ref == 'refs/heads/main'
         with:
           path: frontend/build/web
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Same image Render/Railway/Fly build: Flutter web + FastAPI, one origin.
+      - run: docker build -t pre-ape:ci .
 
   deploy-pages:
     needs: web

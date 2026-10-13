@@ -4,7 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
+import 'package:pre_ape/features/onboarding/energy_options.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
+import 'package:pre_ape/features/onboarding/wizard_widgets.dart';
+import 'package:pre_ape/features/auth/auth_provider.dart';
+import 'package:pre_ape/models/energy.dart';
 import 'package:pre_ape/features/onboarding/web_geolocation_stub.dart'
     if (dart.library.js_interop) 'package:pre_ape/features/onboarding/web_geolocation.dart';
 import 'package:pre_ape/features/onboarding/web_map_widget_stub.dart'
@@ -21,16 +25,23 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
   bool _locationInitiated = false;
   late final TextEditingController _addressController;
   late final FocusNode _addressFocus;
+  late final TextEditingController _titleController;
+  late final TextEditingController _clientController;
 
   @override
   void initState() {
     super.initState();
     _addressController = TextEditingController();
     _addressFocus = FocusNode();
+    final data = ref.read(surveyProvider).data;
+    _titleController = TextEditingController(text: data.title ?? '');
+    _clientController = TextEditingController(text: data.clientName ?? '');
   }
 
   @override
   void dispose() {
+    _titleController.dispose();
+    _clientController.dispose();
     _addressController.dispose();
     _addressFocus.dispose();
     super.dispose();
@@ -59,11 +70,11 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        Text('Dati Generali', style: AppTextStyles.headlineLarge),
-        const SizedBox(height: AppSpacing.xs),
-        Text('Inserisci le informazioni di base dell\'edificio',
-            style: AppTextStyles.bodyMedium),
-        const SizedBox(height: AppSpacing.xl),
+        const StepHeader(
+            'Dati generali', 'Pratica, indirizzo e dati climatici del comune'),
+
+        _buildPracticeFields(ref),
+        const SizedBox(height: AppSpacing.lg),
 
         _buildAddressField(context, ref, survey),
         const SizedBox(height: AppSpacing.xs),
@@ -86,15 +97,78 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
 
         const SizedBox(height: AppSpacing.lg),
 
-        _buildMqSlider(ref, survey),
-        const SizedBox(height: AppSpacing.lg),
+        const ClimateSection(),
 
-        _buildHeightSlider(ref, survey),
-
-        const SizedBox(height: AppSpacing.xxl),
-
-        _buildNextButton(context, ref),
+        const WizardNav(showBack: false),
       ],
+    );
+  }
+
+  // ── Practice header (title + client) ────────────────────────────────
+
+  Widget _buildPracticeFields(WidgetRef ref) {
+    final notifier = ref.read(surveyProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Pratica', style: AppTextStyles.labelLarge),
+        const SizedBox(height: AppSpacing.sm),
+        _boxedField(
+          key: const ValueKey('survey_title'),
+          controller: _titleController,
+          hint: 'Riferimento pratica (es. APE 12/2026)',
+          icon: Icons.folder_outlined,
+          onChanged: notifier.updateTitle,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _boxedField(
+          key: const ValueKey('survey_client'),
+          controller: _clientController,
+          hint: 'Cliente / committente',
+          icon: Icons.person_outline,
+          onChanged: notifier.updateClientName,
+        ),
+      ],
+    );
+  }
+
+  Widget _boxedField({
+    required Key key,
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: AppSpacing.xs),
+            child: Icon(icon, color: AppColors.textMuted, size: 20),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: TextField(
+              key: key,
+              controller: controller,
+              onChanged: onChanged,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                hintText: hint,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -133,6 +207,11 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
                   controller: _addressController,
                   focusNode: _addressFocus,
                   textInputAction: TextInputAction.search,
+                  onChanged: (value) {
+                    // Free-typed text enters the survey immediately so the
+                    // report always has an address, even without geocoding.
+                    ref.read(surveyProvider.notifier).updateAddress(value);
+                  },
                   onSubmitted: (_) => _searchAddress(ref),
                   style: AppTextStyles.bodyMedium,
                   decoration: InputDecoration(
@@ -145,8 +224,7 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
                     ),
                     isDense: true,
                     border: InputBorder.none,
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 14),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
               ),
@@ -158,8 +236,7 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
               ),
               IconButton(
                 tooltip: 'Usa la mia posizione',
-                onPressed:
-                    survey.locating ? null : () => _useMyLocation(ref),
+                onPressed: survey.locating ? null : () => _useMyLocation(ref),
                 icon: survey.locating
                     ? const SizedBox(
                         width: 16,
@@ -188,17 +265,15 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
     if (result == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-              'Indirizzo non trovato: prova a selezionarlo sulla mappa.'),
+          content:
+              Text('Indirizzo non trovato: prova a selezionarlo sulla mappa.'),
           backgroundColor: AppColors.surfaceElevated,
         ),
       );
       return;
     }
 
-    ref
-        .read(surveyProvider.notifier)
-        .updateLatLng(result.lat, result.lng);
+    ref.read(surveyProvider.notifier).updateLatLng(result.lat, result.lng);
     ref.read(surveyProvider.notifier).updateAddress(result.name);
     _addressController.text = result.name;
     _addressController.selection =
@@ -229,152 +304,186 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
       }
     });
   }
+}
 
-  // ── Sliders ────────────────────────────────────────────────────────
+/// Comune (zona climatica e gradi giorno DPR 412/93): ricavato
+/// dall'indirizzo dal server, oppure scelto/corretto a mano.
+class ClimateSection extends ConsumerWidget {
+  const ClimateSection({super.key});
 
-  Widget _buildMqSlider(WidgetRef ref, SurveyData survey) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(surveyProvider.notifier);
+    final building = ref.watch(surveyProvider.select((n) => n.data.building));
+    final result = ref.watch(surveyProvider.select((n) => n.data.result));
+    final detected = result?.comune;
+    final manual = building['comune'] != null;
+
+    return SectionCard(
+      title: 'Località e clima',
+      icon: Icons.thermostat,
       children: [
-        Row(
-          children: [
-            Text('M² Totali', style: AppTextStyles.labelLarge),
-            const Spacer(),
-            Text(
-              '${survey.squareMeters.toInt()} m²',
-              style: AppTextStyles.titleMedium,
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceElevated,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: result == null
+              ? const Text('Calcolo in corso…', style: AppTextStyles.bodyMedium)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      detected?.label ?? 'Comune non individuato',
+                      key: const ValueKey('climate_comune'),
+                      style: AppTextStyles.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Zona climatica ${result.zona} · ${result.gradiGiorno} gradi giorno'
+                      '${detected?.altitudine != null ? ' · ${detected!.altitudine} m s.l.m.' : ''}',
+                      style: AppTextStyles.bodyMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      manual
+                          ? 'Comune scelto manualmente'
+                          : detected == null
+                              ? 'Inserisci l\'indirizzo o scegli il comune qui sotto'
+                              : 'Ricavato dall\'indirizzo (DPR 412/93)',
+                      style: AppTextStyles.bodySmall,
+                    ),
+                  ],
+                ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        const FieldLabel('Comune', fieldKey: 'comune'),
+        _ComuneAutocomplete(
+          initial: building['comune'] as String?,
+          onSelected: (c) => notifier.setBuildingAll({
+            'comune': c.comune,
+            'provincia': c.provincia,
+          }),
+          onCleared: manual
+              ? () =>
+                  notifier.setBuildingAll({'comune': null, 'provincia': null})
+              : null,
+        ),
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: Material(
+            type: MaterialType.transparency,
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Correggi zona o gradi giorno',
+                  style: AppTextStyles.bodyMedium),
+              initiallyExpanded: building['zona_climatica'] != null ||
+                  building['gradi_giorno'] != null,
+              children: const [
+                ChoiceField(
+                    fieldKey: 'zona_climatica',
+                    label: 'Zona climatica',
+                    options: zonaOpts),
+                NumberField(
+                  fieldKey: 'gradi_giorno',
+                  label: 'Gradi giorno',
+                  integer: true,
+                  max: 6000,
+                  hint: 'dal regolamento comunale, se aggiornato',
+                ),
+              ],
             ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Slider(
-          value: survey.squareMeters,
-          min: 0,
-          max: 500,
-          divisions: 50,
-          label: '${survey.squareMeters.toInt()} m²',
-          onChanged: (value) {
-            ref.read(surveyProvider.notifier).updateSquareMeters(value);
-          },
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        const Row(
-          children: [
-            Text('0 m²', style: AppTextStyles.bodySmall),
-            Spacer(),
-            Text('500 m²', style: AppTextStyles.bodySmall),
-          ],
+          ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildHeightSlider(WidgetRef ref, SurveyData survey) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text('Altezza Media', style: AppTextStyles.labelLarge),
-            const Spacer(),
-            Text(
-              '${survey.avgHeight.toStringAsFixed(1)} m',
-              style: AppTextStyles.titleMedium,
+class _ComuneAutocomplete extends ConsumerWidget {
+  const _ComuneAutocomplete(
+      {required this.initial, required this.onSelected, this.onCleared});
+
+  final String? initial;
+  final ValueChanged<ComuneInfo> onSelected;
+  final VoidCallback? onCleared;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final api = ref.read(apiClientProvider);
+    return Autocomplete<ComuneInfo>(
+      key: ValueKey('comune_${initial ?? ''}'),
+      initialValue: TextEditingValue(text: initial ?? ''),
+      displayStringForOption: (c) => c.comune,
+      optionsBuilder: (value) async {
+        final q = value.text.trim();
+        if (q.length < 2) return const <ComuneInfo>[];
+        try {
+          return await api.searchComuni(q);
+        } catch (_) {
+          return const <ComuneInfo>[];
+        }
+      },
+      onSelected: (c) {
+        FocusManager.instance.primaryFocus?.unfocus();
+        onSelected(c);
+      },
+      optionsViewBuilder: (context, onSelect, options) => Align(
+        alignment: Alignment.topLeft,
+        child: Material(
+          color: AppColors.surfaceElevated,
+          elevation: 6,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 280, maxWidth: 420),
+            child: ListView(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true,
+              children: [
+                for (final c in options)
+                  ListTile(
+                    dense: true,
+                    title: Text(c.label, style: AppTextStyles.bodyLarge),
+                    subtitle: Text('Zona ${c.zona} · ${c.gradiGiorno} GG',
+                        style: AppTextStyles.bodySmall),
+                    onTap: () => onSelect(c),
+                  ),
+              ],
             ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Slider(
-          value: survey.avgHeight,
-          min: 2,
-          max: 4,
-          divisions: 20,
-          label: '${survey.avgHeight.toStringAsFixed(1)} m',
-          onChanged: (value) {
-            ref.read(surveyProvider.notifier).updateAvgHeight(value);
-          },
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Row(
-          children: [
-            const Text('2 m', style: AppTextStyles.bodySmall),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: () => _promptManualHeight(context, ref, survey),
-              icon: const Icon(Icons.edit, size: 16),
-              label: const Text('Inserisci manualmente'),
-            ),
-            const Spacer(),
-            const Text('4 m', style: AppTextStyles.bodySmall),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // ── Helpers ────────────────────────────────────────────────────────
-
-  void _promptManualHeight(
-      BuildContext context, WidgetRef ref, SurveyData survey) {
-    final controller =
-        TextEditingController(text: survey.avgHeight.toStringAsFixed(1));
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Altezza media'),
-        content: TextField(
-          controller: controller,
-          keyboardType:
-              const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(hintText: 'es. 2.7'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Annulla'),
           ),
-          TextButton(
-            onPressed: () {
-              final v = double.tryParse(controller.text.replaceAll(',', '.'));
-              if (v != null && v >= 0) {
-                ref.read(surveyProvider.notifier).updateAvgHeight(v);
-              }
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Salva'),
+        ),
+      ),
+      fieldViewBuilder: (context, controller, focus, onSubmit) => TextField(
+        key: const ValueKey('comune_field'),
+        controller: controller,
+        focusNode: focus,
+        style: AppTextStyles.bodyLarge,
+        decoration: InputDecoration(
+          hintText: 'Cerca il comune…',
+          prefixIcon:
+              const Icon(Icons.location_city, color: AppColors.textMuted),
+          suffixIcon: onCleared == null
+              ? null
+              : IconButton(
+                  tooltip: 'Torna al comune dell\'indirizzo',
+                  icon: const Icon(Icons.close, color: AppColors.textMuted),
+                  onPressed: () {
+                    controller.clear();
+                    onCleared!();
+                  },
+                ),
+          filled: true,
+          fillColor: AppColors.surfaceElevated,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            borderSide: const BorderSide(color: AppColors.border),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNextButton(BuildContext context, WidgetRef ref) {
-    return Container(
-      width: double.infinity,
-      height: 56,
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        boxShadow: AppShadows.glow,
-      ),
-      child: MaterialButton(
-        onPressed: () {
-          ref.read(surveyProvider.notifier).nextStep();
-        },
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Avanti',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            SizedBox(width: 8),
-            Icon(Icons.arrow_forward, color: Colors.white, size: 20),
-          ],
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
         ),
       ),
     );

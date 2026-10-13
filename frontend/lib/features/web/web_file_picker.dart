@@ -1,6 +1,7 @@
-// Web-only image picker using a native <input type="file"> element.
+// Web-only multi-file picker using a native <input type="file"> element.
 // On mobile browsers `capture` opens the camera directly; on desktop it is
 // ignored and the OS file dialog (gallery/folder) opens instead.
+// `multiple` enables multi-selection of the additional photos (M4/E2E).
 // Only imported on web builds via the conditional import pattern.
 
 import 'dart:async';
@@ -9,15 +10,18 @@ import 'dart:js_interop';
 import 'package:web/web.dart' as web;
 
 /// Open the camera ([camera] = true) or the gallery/file dialog and return
-/// the selected image as a base64 data-URL, or null if the user cancels.
-Future<({String dataUrl, String name})?> pickImageFile({
+/// every selected image as base64 data-URLs, or null if the user cancels
+/// or no file could be read.
+Future<List<({String dataUrl, String name})>?> pickImageFiles({
   bool camera = false,
+  bool multiple = false,
 }) async {
-  final completer = Completer<({String dataUrl, String name})?>();
+  final completer = Completer<List<({String dataUrl, String name})>?>();
 
   final input = web.document.createElement('input') as web.HTMLInputElement;
   input.type = 'file';
   input.accept = 'image/*';
+  input.multiple = multiple;
   if (camera) {
     input.setAttribute('capture', 'environment');
   }
@@ -38,41 +42,50 @@ Future<({String dataUrl, String name})?> pickImageFile({
     input.remove();
   }
 
-  input.onChange.listen((_) {
+  input.onChange.listen((_) async {
     final files = input.files;
     if (files == null || files.length == 0) {
       if (!completer.isCompleted) completer.complete(null);
       cleanup();
       return;
     }
-    final file = files.item(0)!;
-    final reader = web.FileReader();
-
-    final onLoad = ((web.Event _) {
-      final result = reader.result;
-      if (result == null) {
-        if (!completer.isCompleted) completer.complete(null);
-      } else {
-        final dataUrl = (result as JSString).toDart;
-        if (!completer.isCompleted) {
-          completer.complete((dataUrl: dataUrl, name: file.name));
-        }
+    final results = <({String dataUrl, String name})>[];
+    for (var i = 0; i < files.length; i++) {
+      final file = files.item(i)!;
+      final dataUrl = await _readAsDataUrl(file);
+      if (dataUrl != null) {
+        results.add((dataUrl: dataUrl, name: file.name));
       }
-      cleanup();
-    }).toJS;
-
-    final onError = ((web.Event _) {
-      if (!completer.isCompleted) completer.complete(null);
-      cleanup();
-    }).toJS;
-
-    reader.addEventListener('load', onLoad);
-    reader.addEventListener('error', onError);
-    reader.readAsDataURL(file);
+    }
+    if (!completer.isCompleted) {
+      completer.complete(results.isEmpty ? null : results);
+    }
+    cleanup();
   });
 
   web.document.body?.appendChild(input);
   web.window.addEventListener('focus', focusHandler);
   input.click();
+  return completer.future;
+}
+
+Future<String?> _readAsDataUrl(web.File file) {
+  final completer = Completer<String?>();
+  final reader = web.FileReader();
+
+  final onLoad = ((web.Event _) {
+    final result = reader.result;
+    if (!completer.isCompleted) {
+      completer.complete(result == null ? null : (result as JSString).toDart);
+    }
+  }).toJS;
+
+  final onError = ((web.Event _) {
+    if (!completer.isCompleted) completer.complete(null);
+  }).toJS;
+
+  reader.addEventListener('load', onLoad);
+  reader.addEventListener('error', onError);
+  reader.readAsDataURL(file);
   return completer.future;
 }

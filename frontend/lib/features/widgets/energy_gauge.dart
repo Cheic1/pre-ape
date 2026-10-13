@@ -6,36 +6,39 @@ import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/core/scoring.dart';
 
 class EnergyClass {
+  /// Scala A4…G con i colori dell'etichetta APE (verde → rosso).
   static const List<EnergyClassData> classes = [
-    EnergyClassData(letter: 'A4', range: '>= 120', color: Color(0xFF10B981), description: 'Eccellente'),
-    EnergyClassData(letter: 'A3', range: '90 - 120', color: Color(0xFF34D399), description: 'Molto buono'),
-    EnergyClassData(letter: 'A2', range: '65 - 90', color: Color(0xFF6EE7B7), description: 'Buono'),
-    EnergyClassData(letter: 'A1', range: '55 - 65', color: Color(0xFFA7F3D0), description: 'Ottimo'),
-    EnergyClassData(letter: 'B', range: '40 - 55', color: Color(0xFFFBBF24), description: 'Discreto'),
-    EnergyClassData(letter: 'C', range: '30 - 40', color: Color(0xFFF59E0B), description: 'Medio'),
-    EnergyClassData(letter: 'D', range: '20 - 30', color: Color(0xFFFB923C), description: 'Sufficiente'),
-    EnergyClassData(letter: 'E', range: '15 - 20', color: Color(0xFFFC814A), description: 'Poco efficiente'),
-    EnergyClassData(letter: 'F', range: '10 - 15', color: Color(0xFFF97316), description: 'Efficiente'),
-    EnergyClassData(letter: 'G', range: '< 10', color: Color(0xFFEF4444), description: 'Molto inefficiente'),
+    EnergyClassData(letter: 'A4', color: Color(0xFF00853F), description: 'Eccellente'),
+    EnergyClassData(letter: 'A3', color: Color(0xFF2E9E3E), description: 'Ottima'),
+    EnergyClassData(letter: 'A2', color: Color(0xFF5DB33D), description: 'Molto buona'),
+    EnergyClassData(letter: 'A1', color: Color(0xFF8CC63F), description: 'Buona'),
+    EnergyClassData(letter: 'B', color: Color(0xFFC9D92B), description: 'Discreta'),
+    EnergyClassData(letter: 'C', color: Color(0xFFFFD21B), description: 'Media'),
+    EnergyClassData(letter: 'D', color: Color(0xFFFBB01F), description: 'Sufficiente'),
+    EnergyClassData(letter: 'E', color: Color(0xFFF47B20), description: 'Scarsa'),
+    EnergyClassData(letter: 'F', color: Color(0xFFEE3B24), description: 'Molto scarsa'),
+    EnergyClassData(letter: 'G', color: Color(0xFFC81E1E), description: 'Pessima'),
   ];
+
+  static EnergyClassData of(String letter) =>
+      classes.firstWhere((c) => c.letter == letter, orElse: () => classes.last);
 }
 
 class EnergyClassData {
   final String letter;
-  final String range;
   final Color color;
   final String description;
 
   const EnergyClassData({
     required this.letter,
-    required this.range,
     required this.color,
     required this.description,
   });
 }
 
 class EnergyGauge extends StatelessWidget {
-  final double score;
+  /// Server score 0–100 (null = estimate not available yet).
+  final double? score;
   final double size;
 
   const EnergyGauge({
@@ -44,10 +47,9 @@ class EnergyGauge extends StatelessWidget {
     this.size = 180,
   });
 
-  /// Mapping delegato a `core/scoring.dart` (fonte unica) – rendering
-  /// invariato: stessa tabella `EnergyClass.classes`.
+  /// Mapping delegato a `core/scoring.dart`: stessa tabella `EnergyClass.classes`.
   EnergyClassData get currentClass =>
-      EnergyClass.classes[9 - energyClassIndexForScore(score)];
+      EnergyClass.classes[9 - energyClassIndexForScore(score ?? 0)];
 
   @override
   Widget build(BuildContext context) {
@@ -76,34 +78,31 @@ class EnergyGauge extends StatelessWidget {
           CustomPaint(
             size: Size(size, size),
             painter: _GaugeArcPainter(
-              score: score,
+              score: score ?? 0,
               backgroundColor: AppColors.border,
-              progressColor: currentClass.color,
+              progressColor: score == null ? AppColors.border : currentClass.color,
             ),
           ),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                currentClass.letter,
+                score == null ? '–' : currentClass.letter,
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: size * 0.28,
                   fontWeight: FontWeight.w700,
-                  color: currentClass.color,
+                  color: score == null ? AppColors.textMuted : currentClass.color,
                   height: 1,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                currentClass.description,
-                style: AppTextStyles.labelMedium,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Score: ${score.toInt()}%',
-                style: AppTextStyles.bodySmall,
-              ),
+              if (size >= 120) ...[
+                const SizedBox(height: 4),
+                Text(
+                  score == null ? 'in calcolo' : currentClass.description,
+                  style: AppTextStyles.labelMedium,
+                ),
+              ],
             ],
           ),
         ],
@@ -167,7 +166,7 @@ class _GaugeArcPainter extends CustomPainter {
 }
 
 class CompactEnergyGauge extends StatelessWidget {
-  final double score;
+  final double? score;
   final double size;
 
   const CompactEnergyGauge({

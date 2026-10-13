@@ -15,6 +15,12 @@ dependencies:
   # STATE MANAGEMENT (used across lib/)
   flutter_riverpod: ^2.5.1
 
+  # HTTP – wired API client (M8); `package:http/testing` MockClient nei test
+  http: ^1.2.0
+
+  # Sessione persistente (JWT) – localStorage su web, prefs native su mobile
+  shared_preferences: ^2.3.2
+
   # URL LAUNCHER – used to open OpenStreetMap from the address editor.
   url_launcher: ^6.2.0
 

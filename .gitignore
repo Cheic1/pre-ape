@@ -11,6 +11,7 @@ htmlcov/
 # Env / secrets — never commit
 .env
 .env.*
+!.env.example
 
 # Flutter / Dart
 .dart_tool/
@@ -46,3 +47,7 @@ Pods/
 # Misc
 *.log
 /tmp/
+
+# Claude Code local state (worktrees)
+.claude/worktrees/
+backups/
