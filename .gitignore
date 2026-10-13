@@ -50,3 +50,4 @@ Pods/
 
 # Claude Code local state (worktrees)
 .claude/worktrees/
+backups/
