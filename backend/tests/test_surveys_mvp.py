@@ -3,7 +3,6 @@ import base64
 
 import pytest
 
-from app.core.scoring import compute_score, energy_class_for_score
 from conftest import create_survey
 
 API = "/api/v1/surveys"
@@ -11,42 +10,6 @@ API = "/api/v1/surveys"
 
 def _jpeg(size: int = 64) -> str:
     return "data:image/jpeg;base64," + base64.b64encode(b"\xff" * size).decode()
-
-
-class TestScoringParity:
-    """Same cases as frontend/test/scoring_test.dart (formula must not drift)."""
-
-    @pytest.mark.parametrize(
-        "kwargs, expected",
-        [
-            ({}, 32.0),  # base 30 + default heating 2
-            ({"square_meters": 60}, 32.6),
-            ({"square_meters": 5000}, 52.0),  # area bonus capped at 20
-            ({"wall_thickness": ">40cm", "heating_type": "Pompa di Calore"}, 65.0),
-            ({"window_frame": "PVC", "window_glass": "Triplo"}, 47.0),
-            ({"window_frame": "Legno", "window_glass": "Doppio"}, 42.0),
-            ({"window_frame": "Legno", "window_glass": "Singolo"}, 37.0),
-            (
-                {
-                    "square_meters": 3000,
-                    "wall_thickness": ">40cm",
-                    "window_frame": "PVC",
-                    "window_glass": "Triplo",
-                    "heating_type": "Pompa di Calore",
-                },
-                100.0,  # clamped
-            ),
-        ],
-    )
-    def test_compute_score(self, kwargs, expected):
-        assert compute_score(**kwargs) == pytest.approx(expected)
-
-    @pytest.mark.parametrize(
-        "score, letter",
-        [(0, "G"), (5, "G"), (6, "F"), (50, "B"), (100, "A4"), (150, "A4"), (-3, "G")],
-    )
-    def test_energy_class(self, score, letter):
-        assert energy_class_for_score(score) == letter
 
 
 class TestSurveyList:
@@ -106,14 +69,21 @@ class TestSurveyFields:
         headers, _ = auth_a
         survey_id = create_survey(client, headers, square_meters=100.0)
         created = client.get(f"{API}/{survey_id}", headers=headers).json()
-        assert created["energy_score"] == 33.0
+        assert created["estimated_class"] == created["energy_result"]["classe"]
+        assert created["energy_score"] == created["energy_result"]["punteggio"]
         updated = client.put(
             f"{API}/{survey_id}",
-            json={"wall_thickness": ">40cm", "heating_type": "Pompa di Calore"},
+            json={"building": {
+                "comune": "Milano", "anno_costruzione": 2018, "tipologia": "appartamento",
+                "piano": "intermedio", "telaio": "PVC", "vetro": "Triplo",
+                "generatore": "pompa_calore_aria_acqua", "terminali": "pavimento",
+            }},
             headers=headers,
         ).json()
-        assert updated["energy_score"] == 66.0
-        assert updated["estimated_class"] == energy_class_for_score(66.0)
+        assert updated["climate_zone"] == "E"
+        assert updated["energy_result"]["clima"]["comune"]["comune"] == "Milano"
+        assert updated["energy_score"] > created["energy_score"]
+        assert updated["building"]["generatore"] == "pompa_calore_aria_acqua"
 
     def test_status_complete_and_null_keeps_value(self, client, auth_a):
         headers, _ = auth_a

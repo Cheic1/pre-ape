@@ -17,6 +17,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/energy.dart';
 import '../models/survey.dart';
 
 /// Base class di ogni errore di API: `statusCode` 0 = nessuna risposta
@@ -181,6 +182,29 @@ class ApiClient {
       body: body.toJson(),
     );
     return SurveyRead.fromJson(json);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Energy estimate + climate data
+  // ---------------------------------------------------------------------------
+
+  /// `POST /api/v1/estimate` → stima live (nulla viene salvato). [body] ha le
+  /// chiavi del sottoinsieme energetico del sopralluogo (`building`,
+  /// `square_meters`, `avg_height`, `address`, `latitude`, `longitude`).
+  Future<EnergyResult> estimate(Map<String, Object?> body) async {
+    final json = await _request('POST', '$_apiPrefix/estimate', body: body);
+    return EnergyResult.fromJson(json);
+  }
+
+  /// `GET /api/v1/climate/comuni?q=` → autocompletamento comuni.
+  Future<List<ComuneInfo>> searchComuni(String query) async {
+    final q = Uri.encodeQueryComponent(query);
+    final json = await _requestAny('GET', '$_apiPrefix/climate/comuni?q=$q');
+    if (json is! List) return const [];
+    return json
+        .whereType<Map<String, dynamic>>()
+        .map(ComuneInfo.fromJson)
+        .toList(growable: false);
   }
 
   // ---------------------------------------------------------------------------

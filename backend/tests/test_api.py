@@ -462,10 +462,13 @@ class TestSurveyResults:
         data = response.json()
         assert data["survey_id"] == survey_id
         assert data["status"] == "draft"
-        # computed server-side: 30 base + 1 (100 m²) + 10 (heat pump) = 41
-        assert data["energy_score"] == 41.0
-        assert data["estimated_class"] == "C"
-        assert data["final_score"] == 41.0
+        # computed server-side by app.core.energy (legacy heating_type honoured)
+        result = data["energy_result"]
+        assert data["estimated_class"] == result["classe"]
+        assert data["energy_score"] == result["punteggio"]
+        assert data["final_score"] == result["punteggio"]
+        assert result["impianto"]["generatore"] == "Pompa di calore aria-acqua"
+        assert result["clima"]["comune"]["comune"] == "Milano"
         assert data["photo_count"] == 0
         assert data["geo_location"]["address"] == "Via Roma 1, 20100 Milano MI"
         assert data["building_data"]["square_meters"] == 100.0

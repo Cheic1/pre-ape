@@ -6,6 +6,7 @@ import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/features/auth/auth_provider.dart';
 import 'package:pre_ape/features/onboarding/onboarding_page.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
+import 'package:pre_ape/features/widgets/energy_gauge.dart';
 import 'package:pre_ape/models/survey.dart';
 import 'package:pre_ape/services/api_client.dart';
 
@@ -292,7 +293,9 @@ class _SurveyCard extends StatelessWidget {
           row.clientName!.isNotEmpty &&
           row.clientName != title)
         row.clientName!,
-      if (row.address != null && row.address!.isNotEmpty && row.address != title)
+      if (row.comune != null && row.comune!.isNotEmpty && row.comune != title)
+        row.comune!
+      else if (row.address != null && row.address!.isNotEmpty && row.address != title)
         row.address!,
     ].join(' · ');
 
@@ -365,24 +368,12 @@ class _ClassBadge extends StatelessWidget {
 
   final String? letter;
 
-  static const _colors = <String, Color>{
-    'A4': Color(0xFF15803D),
-    'A3': Color(0xFF16A34A),
-    'A2': Color(0xFF22C55E),
-    'A1': Color(0xFF4ADE80),
-    'B': Color(0xFF84CC16),
-    'C': Color(0xFFEAB308),
-    'D': Color(0xFFF59E0B),
-    'E': Color(0xFFF97316),
-    'F': Color(0xFFEF4444),
-    'G': Color(0xFFB91C1C),
-  };
-
   @override
   Widget build(BuildContext context) {
-    final color = _colors[letter] ?? AppColors.border;
+    final color =
+        letter == null ? AppColors.border : EnergyClass.of(letter!).color;
     return Tooltip(
-      message: 'Classe indicativa (stima preliminare, non APE)',
+      message: 'Classe stimata (DM 26/06/2015, stima preliminare: non è un APE)',
       child: Container(
         width: 48,
         height: 48,

@@ -78,6 +78,11 @@ class Survey(Base):
     photos = Column(JSON)
     additional_photos = Column(JSON)
 
+    # Dati per il calcolo energetico (app.core.energy.BuildingInputs) e
+    # risultato completo dell'ultima stima (classe, EP, interventi…).
+    building = Column(JSON)
+    energy_result = Column(JSON)
+
     # Results
     estimated_class = Column(String(5))
     energy_score = Column(Float)

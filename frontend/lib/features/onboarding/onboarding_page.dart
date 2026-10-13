@@ -6,9 +6,11 @@ import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
 import 'package:pre_ape/features/widgets/energy_gauge.dart';
 import 'package:pre_ape/features/onboarding/step1_general_data.dart';
-import 'package:pre_ape/features/onboarding/step2_enclosure.dart';
-import 'package:pre_ape/features/onboarding/step3_systems.dart';
-import 'package:pre_ape/features/onboarding/step4_photos.dart';
+import 'package:pre_ape/features/onboarding/step2_building.dart';
+import 'package:pre_ape/features/onboarding/step3_envelope.dart';
+import 'package:pre_ape/features/onboarding/step4_systems.dart';
+import 'package:pre_ape/features/onboarding/step5_photos.dart';
+import 'package:pre_ape/features/onboarding/step6_results.dart';
 import 'package:pre_ape/features/onboarding/survey_save.dart';
 
 class OnboardingPage extends ConsumerWidget {
@@ -30,7 +32,7 @@ class OnboardingPage extends ConsumerWidget {
         child: Column(
           children: [
             _buildHeader(context, ref, survey, currentStep),
-            _buildStepIndicator(currentStep),
+            _buildStepIndicator(ref, currentStep),
             Expanded(
               child: _buildStepContent(context, ref, currentStep),
             ),
@@ -94,7 +96,10 @@ class OnboardingPage extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          EnergyGauge(score: survey.currentScore, size: 80),
+          GestureDetector(
+            onTap: () => ref.read(surveyProvider.notifier).goToStep(SurveyNotifier.totalSteps),
+            child: EnergyGauge(score: survey.score, size: 72),
+          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -113,10 +118,15 @@ class OnboardingPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  survey.status == 'completed'
-                      ? 'Completato · stima indicativa'
-                      : 'Bozza · stima indicativa',
+                  [
+                    survey.status == 'completed' ? 'Completato' : 'Bozza',
+                    if (survey.result != null)
+                      'EP ${survey.result!.epGlNren.toStringAsFixed(0)} kWh/m²a',
+                    if (survey.estimating) 'calcolo…',
+                  ].join(' · '),
                   style: AppTextStyles.bodyMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -145,37 +155,46 @@ class OnboardingPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildStepIndicator(int currentStep) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _StepDot(step: 1, label: 'Dati', isActive: currentStep == 1, isCompleted: currentStep > 1),
-          _StepLine(isActive: currentStep >= 2),
-          _StepDot(step: 2, label: 'Involucro', isActive: currentStep == 2, isCompleted: currentStep > 2),
-          _StepLine(isActive: currentStep >= 3),
-          _StepDot(step: 3, label: 'Impianti', isActive: currentStep == 3, isCompleted: currentStep > 3),
-          _StepLine(isActive: currentStep >= 4),
-          _StepDot(step: 4, label: 'Foto', isActive: currentStep == 4, isCompleted: false),
-        ],
-      ),
+  static const _stepLabels = ['Dati', 'Edificio', 'Involucro', 'Impianti', 'Foto', 'Risultati'];
+
+  Widget _buildStepIndicator(WidgetRef ref, int currentStep) {
+    final notifier = ref.read(surveyProvider.notifier);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      child: LayoutBuilder(builder: (context, constraints) {
+        // On phones only the current step keeps its label.
+        final wide = constraints.maxWidth >= 520;
+        return Row(
+          children: [
+            for (var i = 1; i <= _stepLabels.length; i++) ...[
+              if (i > 1) Expanded(child: _StepLine(isActive: currentStep >= i)),
+              InkWell(
+                key: ValueKey('step_dot_$i'),
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => notifier.goToStep(i),
+                child: _StepDot(
+                  step: i,
+                  label: wide || currentStep == i ? _stepLabels[i - 1] : '',
+                  isActive: currentStep == i,
+                  isCompleted: currentStep > i,
+                ),
+              ),
+            ],
+          ],
+        );
+      }),
     );
   }
 
   Widget _buildStepContent(BuildContext context, WidgetRef ref, int currentStep) {
-    switch (currentStep) {
-      case 1:
-        return const Step1GeneralData();
-      case 2:
-        return const Step2Enclosure();
-      case 3:
-        return const Step3Systems();
-      case 4:
-        return const Step4Photos();
-      default:
-        return const Step1GeneralData();
-    }
+    return switch (currentStep) {
+      2 => const Step2Building(),
+      3 => const Step3Envelope(),
+      4 => const Step4Systems(),
+      5 => const Step5Photos(),
+      6 => const Step6Results(),
+      _ => const Step1GeneralData(),
+    };
   }
 }
 
@@ -198,8 +217,8 @@ class _StepDot extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 32,
-          height: 32,
+          width: 28,
+          height: 28,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: isActive ? AppColors.primary : AppColors.surfaceElevated,
@@ -224,9 +243,10 @@ class _StepDot extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           label,
-          style: isActive
-              ? AppTextStyles.labelMedium.copyWith(color: AppColors.primary)
-              : AppTextStyles.labelMedium,
+          style: (isActive
+                  ? AppTextStyles.labelMedium.copyWith(color: AppColors.primary)
+                  : AppTextStyles.labelMedium)
+              .copyWith(fontSize: 10),
         ),
       ],
     );
@@ -241,9 +261,8 @@ class _StepLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 40,
       height: 2,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
+      margin: const EdgeInsets.only(left: 2, right: 2, bottom: 14),
       decoration: BoxDecoration(
         color: isActive ? AppColors.primary : AppColors.border,
         borderRadius: BorderRadius.circular(1),

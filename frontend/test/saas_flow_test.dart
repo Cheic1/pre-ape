@@ -184,7 +184,9 @@ void main() {
       final n = SurveyNotifier()..startNew();
       n.updateTitle('APE 7/2026');
       n.updateClientName('Mario Rossi');
-      n.updateWindowType('PVC Doppio');
+      n.setBuilding('telaio', 'PVC');
+      n.setBuilding('vetro', 'Doppio');
+      n.setBuilding('anno_costruzione', 1975);
       n.updateNotes('Caldaia in cantina');
       expect(n.dirty, isTrue);
 
@@ -194,8 +196,9 @@ void main() {
       expect(n.dirty, isFalse);
       expect(lastBody!['title'], 'APE 7/2026');
       expect(lastBody!['client_name'], 'Mario Rossi');
-      expect(lastBody!['window_frame'], 'PVC');
-      expect(lastBody!['window_glass'], 'Doppio');
+      expect(lastBody!['building'],
+          {'telaio': 'PVC', 'vetro': 'Doppio', 'anno_costruzione': 1975});
+      expect(lastBody!.containsKey('window_frame'), isFalse);
       expect(lastBody!['notes'], 'Caldaia in cantina');
       expect(lastBody!.containsKey('status'), isFalse);
       expect(lastBody!.containsKey('energy_score'), isFalse);
@@ -237,19 +240,93 @@ void main() {
       );
       final n = SurveyNotifier()..loadFrom(read);
       expect(n.data.surveyId, 's-1');
-      expect(n.data.windowType, 'Legno Triplo');
+      // colonne del primo MVP → input energetici
+      expect(n.data.building, {
+        'telaio': 'Legno',
+        'vetro': 'Triplo',
+        'generatore': 'pompa_calore_aria_acqua',
+      });
       expect(n.data.squareMeters, 120);
       expect(n.data.photos.keys, ['Facciata']);
       expect(n.data.additionalPhotos, hasLength(1));
       expect(n.currentStep, 1);
       expect(n.dirty, isFalse);
-      // 30 + 1.2 (m²) + 15 (triplo) + 10 (pdc)
-      expect(n.data.currentScore, closeTo(56.2, 1e-9));
+      expect(n.data.result, isNull);
       // round-trip verso il server
       final wire = n.toWire();
-      expect(wire.windowFrame, 'Legno');
-      expect(wire.windowGlass, 'Triplo');
+      expect(wire.building!['vetro'], 'Triplo');
+      expect(wire.windowFrame, isNull);
       expect(wire.photos, {'Facciata': 'data:image/jpeg;base64,AAAA'});
+    });
+
+    test('loadFrom: building salvato vince sulle colonne legacy', () {
+      final read = SurveyRead(
+        id: 's-2',
+        status: 'draft',
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+        windowGlass: 'Singolo',
+        building: const {'vetro': 'Triplo', 'comune': 'Roma'},
+      );
+      final n = SurveyNotifier()..loadFrom(read);
+      expect(n.data.building['vetro'], 'Triplo');
+      expect(n.data.building['comune'], 'Roma');
+    });
+
+    test('stima live: POST /estimate col sottoinsieme energetico', () async {
+      Map<String, dynamic>? body;
+      final api = ApiClient(
+        baseUrl: _base,
+        client: MockClient((req) async {
+          expect('${req.method} ${req.url.path}', 'POST /api/v1/estimate');
+          expect(req.headers['Authorization'], 'Bearer jwt-1');
+          body = jsonDecode(req.body) as Map<String, dynamic>;
+          return _json({'classe': 'D', 'punteggio': 34.0, 'ep': {'gl_nren': 90.0}});
+        }),
+      )..setToken('jwt-1');
+      final n = SurveyNotifier(api: api, estimateDebounce: Duration.zero);
+      n.updateSquareMeters(95);
+      n.setBuilding('generatore', 'caldaia_condensazione');
+      n.setBuilding('generatore', null); // cleared answers are not sent
+      n.setBuilding('piano', 'ultimo');
+      await n.refreshEstimate();
+      expect(body!['square_meters'], 95);
+      expect(body!['building'], {'piano': 'ultimo'});
+      expect(n.data.result!.classe, 'D');
+      expect(n.data.score, 34.0);
+      expect(n.data.estimating, isFalse);
+      n.dispose();
+    });
+
+    test('stima live: errore del server non cancella la stima precedente', () async {
+      var fail = false;
+      final api = ApiClient(
+        baseUrl: _base,
+        client: MockClient((req) async => fail
+            ? _json({'detail': 'boom'}, 500)
+            : _json({'classe': 'C', 'punteggio': 45.0})),
+      )..setToken('jwt-1');
+      final n = SurveyNotifier(api: api, estimateDebounce: Duration.zero);
+      await n.refreshEstimate();
+      fail = true;
+      await n.refreshEstimate();
+      expect(n.data.result!.classe, 'C');
+      n.dispose();
+    });
+
+    test('senza login nessuna chiamata di stima', () async {
+      var calls = 0;
+      final api = ApiClient(
+        baseUrl: _base,
+        client: MockClient((req) async {
+          calls++;
+          return _json({});
+        }),
+      );
+      final n = SurveyNotifier(api: api);
+      await n.refreshEstimate();
+      expect(calls, 0);
+      n.dispose();
     });
   });
 

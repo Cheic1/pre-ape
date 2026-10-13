@@ -21,13 +21,23 @@ Resource: Survey (JSON)
   {id: uuid, title?, client_name?, notes?, address?, latitude?, longitude?,
    square_meters?, avg_height?, climate_zone?, wall_thickness?, window_frame?,
    window_glass?, heating_type?, generator_type?, generator_power_kw?,
-   generator_year?, photos?: {slot: data-URL}, additional_photos?: [data-URL],
-   estimated_class?, energy_score?, status: "draft" | "completed" | "exported",
+   generator_year?, building?: BuildingInputs, photos?: {slot: data-URL},
+   additional_photos?: [data-URL], estimated_class?, energy_score?,
+   energy_result?: EnergyResult, status: "draft" | "completed" | "exported",
    created_at: datetime, updated_at: datetime}
-  estimated_class / energy_score are computed by the server on every
-  create/update (app.core.scoring, same formula as the Flutter client): sending
-  them to POST/PUT /surveys -> 422 (input models use extra="forbid").
+  `building` holds every input of the energy model (app.core.energy.inputs,
+  extra="forbid"); the flat wall_/window_/heating_/generator_ columns are the
+  first MVP's inputs, still read as a fallback for old surveys.
+  estimated_class / energy_score / energy_result / climate_zone are computed by
+  the server on every create/update (app.core.energy): sending the first three
+  to POST/PUT /surveys -> 422 (input models use extra="forbid").
   Photos are data:image/(jpeg|png|webp);base64 URLs, capped per photo and count.
+
+Energy estimate (DM 26/06/2015 classification, UNI/TS 11300 simplified)
+  POST /api/v1/estimate  {building?, square_meters?, avg_height?, address?,
+                          latitude?, longitude?}  -> 200 EnergyResult (live preview)
+  GET  /api/v1/climate/comuni?q=mil           -> 200 [{comune, provincia, zona, gradi_giorno…}]
+  GET  /api/v1/climate/resolve?address=&lat=&lon= -> 200 comune | 404
 
 Endpoints (path ids are UUIDs -> 422 when malformed, per-field validation)
   GET    /api/v1/surveys                     -> 200 [SurveySummary] (caller's, newest first)
@@ -59,8 +69,9 @@ import logging
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core import energy
+from app.core.energy import BuildingInputs, climate
 from app.core.rate_limit import auth_rate_limiter, client_ip
-from app.core.scoring import compute_score, energy_class_for_score
 from app.core.security import (
     create_access_token,
     decode_token,
@@ -223,6 +234,7 @@ class SurveyBase(BaseModel):
     generator_type: Optional[str] = Field(default=None, max_length=50)
     generator_power_kw: Optional[float] = Field(default=None, ge=0)
     generator_year: Optional[int] = Field(default=None, ge=1900, le=2100)
+    building: Optional[BuildingInputs] = None
     photos: Optional[Dict[str, str]] = None
     additional_photos: Optional[List[str]] = None
     status: Optional[SurveyStatus] = None
@@ -271,6 +283,7 @@ class SurveyResponse(SurveyBase):
     id: UUID
     estimated_class: Optional[str] = None
     energy_score: Optional[float] = None
+    energy_result: Optional[Dict[str, Any]] = None
     status: str
     created_at: datetime
     updated_at: datetime
@@ -289,25 +302,62 @@ class SurveySummary(BaseModel):
     energy_score: Optional[float] = None
     status: str
     photo_count: int = 0
+    comune: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+
+class EstimateRequest(BaseModel):
+    """Body of POST /estimate: the energy-relevant subset of a survey."""
+    model_config = ConfigDict(extra="forbid")
+
+    building: Optional[BuildingInputs] = None
+    square_meters: Optional[float] = Field(default=None, ge=0, le=100_000)
+    avg_height: Optional[float] = Field(default=None, ge=0, le=100)
+    address: Optional[str] = Field(default=None, max_length=512)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
 
 
 def _photo_count(survey: Survey) -> int:
     return len(survey.photos or {}) + len(survey.additional_photos or [])
 
 
+def _comune_name(survey: Survey) -> Optional[str]:
+    comune = ((survey.energy_result or {}).get("clima") or {}).get("comune")
+    return comune.get("comune") if isinstance(comune, dict) else None
+
+
+def _building_of(survey: Survey) -> BuildingInputs:
+    try:
+        return BuildingInputs.model_validate(survey.building or {})
+    except ValueError:  # stored by an older schema: ignore what no longer validates
+        logger.warning("Survey %s: building inputs no longer valid, using defaults", survey.id)
+        return BuildingInputs()
+
+
 def _apply_score(survey: Survey) -> None:
-    """Server-side score: same formula as the Flutter client (app.core.scoring)."""
-    score = compute_score(
+    """Server-side energy estimate (app.core.energy), stored with the survey."""
+    result = energy.compute(
+        _building_of(survey),
         square_meters=survey.square_meters,
-        wall_thickness=survey.wall_thickness,
-        window_frame=survey.window_frame,
-        window_glass=survey.window_glass,
-        heating_type=survey.heating_type,
+        avg_height=survey.avg_height,
+        address=survey.address,
+        latitude=survey.latitude,
+        longitude=survey.longitude,
+        legacy={
+            "wall_thickness": survey.wall_thickness,
+            "window_frame": survey.window_frame,
+            "window_glass": survey.window_glass,
+            "heating_type": survey.heating_type,
+            "generator_type": survey.generator_type,
+            "generator_year": survey.generator_year,
+        },
     )
-    survey.energy_score = score
-    survey.estimated_class = energy_class_for_score(score)
+    survey.energy_result = result
+    survey.energy_score = result["punteggio"]
+    survey.estimated_class = result["classe"]
+    survey.climate_zone = result["clima"]["zona"]
 
 class PhotoAnalysisBase(BaseModel):
     survey_id: UUID
@@ -458,6 +508,7 @@ async def list_surveys(
             energy_score=s.energy_score,
             status=s.status or "draft",
             photo_count=_photo_count(s),
+            comune=_comune_name(s),
             created_at=s.created_at,
             updated_at=s.updated_at,
         )
@@ -602,6 +653,7 @@ async def get_survey_results(
             "generator_power_kw": survey.generator_power_kw,
             "generator_year": survey.generator_year
         },
+        "energy_result": survey.energy_result,
         "photo_count": _photo_count(survey),
         "status": survey.status,
         "created_at": survey.created_at,
@@ -609,6 +661,45 @@ async def get_survey_results(
     }
 
     return results
+
+@router.post("/estimate")
+async def estimate(
+    payload: EstimateRequest,
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Live estimate for the wizard (nothing is stored)."""
+    return energy.compute(
+        payload.building,
+        square_meters=payload.square_meters,
+        avg_height=payload.avg_height,
+        address=payload.address,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+    )
+
+
+@router.get("/climate/comuni")
+async def search_comuni(
+    q: str,
+    current_user: User = Depends(get_current_user),
+) -> List[Dict[str, Any]]:
+    """Autocomplete: comuni whose name starts with / contains ``q``."""
+    return [c.as_dict() for c in climate.search(q[:80])]
+
+
+@router.get("/climate/resolve")
+async def resolve_comune(
+    address: Optional[str] = None,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Comune (and its climate data) for a geocoded address / coordinates."""
+    found = climate.resolve(address[:512] if address else None, lat, lon)
+    if found is None:
+        raise HTTPException(status_code=404, detail="Comune non individuato")
+    return found.as_dict()
+
 
 async def analyze_generator_photo(survey_id: str):
     logger.info(f"Starting AI analysis for survey {survey_id}")

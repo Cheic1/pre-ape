@@ -3,13 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pre_ape/features/onboarding/media_rules.dart';
 import 'package:pre_ape/features/onboarding/onboarding_page.dart';
-import 'package:pre_ape/features/onboarding/step4_photos.dart';
+import 'package:pre_ape/features/onboarding/step5_photos.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
 
 /// Data-URL immagine piccolo e valido.
 String _thumb(int i) => 'data:image/png;base64,QUFB${'Q' * i}';
 
-Future<ProviderContainer> _pumpStep4(WidgetTester tester) async {
+Future<ProviderContainer> _pumpStep5(WidgetTester tester) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -17,20 +17,20 @@ Future<ProviderContainer> _pumpStep4(WidgetTester tester) async {
 
   await tester.pumpWidget(
     const ProviderScope(
-      child: MaterialApp(home: Scaffold(body: Step4Photos())),
+      child: MaterialApp(home: Scaffold(body: Step5Photos())),
     ),
   );
   await tester.pumpAndSettle();
   return ProviderScope.containerOf(
-    tester.element(find.byType(Step4Photos)),
+    tester.element(find.byType(Step5Photos)),
   );
 }
 
 void main() {
-  group('M4 – sezione «Altre foto» (step 4)', () {
+  group('M4 – sezione «Altre foto» (step 5)', () {
     testWidgets('tile «Aggiungi foto» riapre la stessa bottom sheet',
         (tester) async {
-      await _pumpStep4(tester);
+      await _pumpStep5(tester);
 
       expect(find.text('Altre foto'), findsOneWidget);
       expect(find.text('Aggiungi foto'), findsOneWidget);
@@ -58,7 +58,7 @@ void main() {
 
     testWidgets('thumbnail con ✕: rimozione per indice con feedback',
         (tester) async {
-      final container = await _pumpStep4(tester);
+      final container = await _pumpStep5(tester);
       final notifier = container.read(surveyProvider.notifier);
       expect(notifier.addAdditionalPhoto(_thumb(1)), isTrue);
       expect(notifier.addAdditionalPhoto(_thumb(2)), isTrue);
@@ -86,7 +86,7 @@ void main() {
     });
 
     testWidgets('cap 6: sparisce il tile e compare l\'avviso', (tester) async {
-      final container = await _pumpStep4(tester);
+      final container = await _pumpStep5(tester);
       final notifier = container.read(surveyProvider.notifier);
       for (var i = 0; i < kMaxAdditionalPhotos; i++) {
         expect(notifier.addAdditionalPhoto(_thumb(i)), isTrue);
@@ -129,27 +129,25 @@ void main() {
       );
       final notifier = container.read(surveyProvider.notifier);
 
-      // step 1 → 4
-      notifier.nextStep();
-      notifier.nextStep();
-      notifier.nextStep();
+      // step 1 → 5
+      notifier.goToStep(5);
       await settleAbsorbingGauge();
-      expect(find.byType(Step4Photos), findsOneWidget);
+      expect(find.byType(Step5Photos), findsOneWidget);
 
       expect(notifier.addAdditionalPhoto(_thumb(1)), isTrue);
       expect(notifier.addAdditionalPhoto(_thumb(2)), isTrue);
       await settleAbsorbingGauge();
 
-      // Back al passo 3…
+      // Back al passo 4…
       notifier.previousStep();
       await settleAbsorbingGauge();
-      expect(find.byType(Step4Photos), findsNothing);
+      expect(find.byType(Step5Photos), findsNothing);
       expect(notifier.data.additionalPhotos, hasLength(2));
 
       // …e forward: le foto aggiuntive sopravvivono al back/forward.
       notifier.nextStep();
       await tester.pumpAndSettle();
-      expect(find.byType(Step4Photos), findsOneWidget);
+      expect(find.byType(Step5Photos), findsOneWidget);
       expect(find.byKey(const ValueKey('additional_photo_1')), findsOneWidget);
       expect(notifier.data.additionalPhotos, hasLength(2));
       expect(tester.takeException(), isNull);

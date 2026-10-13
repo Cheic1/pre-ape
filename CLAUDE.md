@@ -35,6 +35,6 @@ docker compose up -d        # home-server stack; needs .env (see .env.example)
 
 ## Cross-cutting rules
 
-- Changing the score formula means editing both `backend/app/core/scoring.py` and `frontend/lib/core/scoring.dart`, and keeping the parity tests in `backend/tests/test_surveys_mvp.py` green.
-- Adding a survey field touches: the SQLAlchemy model + `_ADDITIVE_MIGRATIONS` (backend), the Pydantic schemas in `backend/app/api/v1/__init__.py` (`extra="forbid"`, so the client must not send unknown keys), `frontend/lib/models/survey.dart`, and `SurveyNotifier.loadFrom`/`toWire` in `survey_provider.dart`.
+- The energy estimate lives only in `backend/app/core/energy/` (tests in `backend/tests/test_energy.py`); the frontend just renders `energy_result`. If the score → class mapping changes, update `frontend/lib/core/scoring.dart` too.
+- Adding a survey field touches: the SQLAlchemy model (energy inputs usually go in `BuildingInputs` instead — no migration) + `_ADDITIVE_MIGRATIONS` (backend), the Pydantic schemas in `backend/app/api/v1/__init__.py` (`extra="forbid"`, so the client must not send unknown keys), `frontend/lib/models/survey.dart`, and `SurveyNotifier.loadFrom`/`toWire` in `survey_provider.dart`.
 - CI (`.github/workflows/build.yml`) runs Postgres 15 and builds the Pages web bundle with `--base-href /pre-ape/`; the Docker image uses `--base-href /`.

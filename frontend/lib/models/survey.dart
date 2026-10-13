@@ -28,6 +28,8 @@
 /// campo – l'update resta parziale e sicuro.
 library;
 
+import 'energy.dart';
+
 /// Corpo di `POST /api/v1/surveys` e `PUT /api/v1/surveys/{id}`
 /// (gli schema contrattuali `SurveyCreate` e `SurveyUpdate` sono identici).
 class SurveyCreate {
@@ -50,6 +52,7 @@ class SurveyCreate {
     this.generatorType,
     this.generatorPowerKw,
     this.generatorYear,
+    this.building,
     this.additionalPhotos,
   });
 
@@ -72,6 +75,7 @@ class SurveyCreate {
         generatorType: json['generator_type'] as String?,
         generatorPowerKw: (json['generator_power_kw'] as num?)?.toDouble(),
         generatorYear: (json['generator_year'] as num?)?.toInt(),
+        building: (json['building'] as Map<String, dynamic>?),
         additionalPhotos:
             (json['additional_photos'] as List<dynamic>?)?.cast<String>(),
       );
@@ -103,6 +107,10 @@ class SurveyCreate {
   final double? generatorPowerKw;
   final int? generatorYear;
 
+  /// Dati per il calcolo energetico (schema `BuildingInputs` del backend:
+  /// chiavi snake_case, valori ammessi in `energy_options.dart`).
+  final Map<String, Object?>? building;
+
   /// Foto aggiuntive (data-URL), max 6 lato server.
   final List<String>? additionalPhotos;
 
@@ -126,6 +134,11 @@ class SurveyCreate {
         if (generatorType != null) 'generator_type': generatorType,
         if (generatorPowerKw != null) 'generator_power_kw': generatorPowerKw,
         if (generatorYear != null) 'generator_year': generatorYear,
+        if (building != null)
+          'building': <String, Object?>{
+            for (final e in building!.entries)
+              if (e.value != null) e.key: e.value,
+          },
         if (additionalPhotos != null) 'additional_photos': additionalPhotos,
       };
 }
@@ -158,6 +171,8 @@ class SurveyRead {
     this.generatorYear,
     this.estimatedClass,
     this.energyScore,
+    this.building,
+    this.energyResult,
     this.additionalPhotos,
   });
 
@@ -186,6 +201,10 @@ class SurveyRead {
         generatorYear: (json['generator_year'] as num?)?.toInt(),
         estimatedClass: json['estimated_class'] as String?,
         energyScore: (json['energy_score'] as num?)?.toDouble(),
+        building: (json['building'] as Map<String, dynamic>?),
+        energyResult: json['energy_result'] is Map<String, dynamic>
+            ? EnergyResult.fromJson(json['energy_result'] as Map<String, dynamic>)
+            : null,
         additionalPhotos:
             (json['additional_photos'] as List<dynamic>?)?.cast<String>(),
       );
@@ -227,6 +246,12 @@ class SurveyRead {
   final String? estimatedClass;
   final double? energyScore;
 
+  /// Input del calcolo energetico salvati col sopralluogo.
+  final Map<String, dynamic>? building;
+
+  /// Ultima stima completa calcolata dal server (read-only).
+  final EnergyResult? energyResult;
+
   /// Foto aggiuntive (data-URL).
   final List<String>? additionalPhotos;
 }
@@ -245,6 +270,7 @@ class SurveySummary {
     this.estimatedClass,
     this.energyScore,
     this.photoCount = 0,
+    this.comune,
   });
 
   factory SurveySummary.fromJson(Map<String, dynamic> json) => SurveySummary(
@@ -259,6 +285,7 @@ class SurveySummary {
         estimatedClass: json['estimated_class'] as String?,
         energyScore: (json['energy_score'] as num?)?.toDouble(),
         photoCount: (json['photo_count'] as num?)?.toInt() ?? 0,
+        comune: json['comune'] as String?,
       );
 
   final String id;
@@ -272,6 +299,9 @@ class SurveySummary {
   final String? estimatedClass;
   final double? energyScore;
   final int photoCount;
+
+  /// Comune individuato dal calcolo energetico (per la lista).
+  final String? comune;
 
   bool get isCompleted => status == 'completed';
 }

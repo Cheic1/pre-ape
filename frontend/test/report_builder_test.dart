@@ -1,21 +1,57 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pre_ape/features/onboarding/report_builder.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
+import 'package:pre_ape/models/energy.dart';
 
 SurveyData _survey({
   String? wall,
   Map<String, String>? photos,
   List<String>? additional,
+  EnergyResult? result,
 }) {
   final data = SurveyData()
     ..address = 'Via Roma 1, Milano'
-    ..windowType = 'Legno Doppio'
-    ..heatingType = 'Condensazione';
-  if (wall != null) data.wallThickness = wall;
+    ..building = {
+      'telaio': 'Legno',
+      'vetro': 'Doppio',
+      'generatore': 'caldaia_condensazione',
+      if (wall != null) 'spessore_muri': wall,
+    }
+    ..result = result;
   if (photos != null) data.photos = photos;
   if (additional != null) data.additionalPhotos = additional;
   return data;
 }
+
+final _result = EnergyResult.fromJson({
+  'classe': 'E',
+  'punteggio': 33.0,
+  'rapporto_ep': 2.3,
+  'metodo': 'Stima preliminare DM 26/06/2015',
+  'clima': {
+    'zona': 'E',
+    'gradi_giorno': 2404,
+    'comune': {'comune': 'Milano', 'provincia': 'MI', 'zona': 'E', 'gradi_giorno': 2404},
+  },
+  'ep': {'gl_nren': 120.5, 'gl_ren': 8.1, 'h_nd': 70.0, 'h_nren': 100.0, 'w_nren': 20.5},
+  'riferimento': {'gl_nren_rif_standard': 52.4},
+  'trasmittanze': {'pareti': 1.15, 'finestre': 2.83},
+  'trasmittanze_limite': {'pareti': 0.26, 'finestre': 1.4},
+  'geometria': {'pareti_opache': 50.0, 'superfici_finestrate': 10.0},
+  'consumi': [
+    {'vettore': 'metano', 'kwh': 9600, 'quantita': 1000, 'unita': 'Smc', 'costo_eur': 1152},
+  ],
+  'costo_annuo_eur': 1152,
+  'co2_kg_anno': 1900,
+  'interventi': [
+    {'codice': 'cappotto', 'intervento': 'Cappotto <12 cm>', 'classe': 'C',
+     'riduzione_ep_pct': 40.0, 'risparmio_annuo_eur': 450, 'investimento_eur': 6500,
+     'tempo_ritorno_anni': 14.4, 'classi_guadagnate': 2},
+  ],
+  'assunzioni': [
+    {'campo': 'anno_costruzione', 'descrizione': 'Anno di costruzione', 'valore': 1970},
+  ],
+});
 
 int _imgCount(String html) => html.split('<img').length - 1;
 
@@ -70,39 +106,34 @@ void main() {
       expect(html, contains('Nessuna foto aggiuntiva.'));
     });
 
-    test('M3: «Spessore muri» con label umana, mai il valore grezzo', () {
-      final html = buildReportHtml(_survey(wall: '30-40cm'));
-
-      expect(html, contains('<td>Medio — 30–40 cm</td>'));
-      expect(html, isNot(contains('30-40cm')));
+    test('spessore muri con label umana ed escaping', () {
+      expect(buildReportHtml(_survey(wall: '30-40cm')), contains('<td>Spessore muri</td><td>Medio</td>'));
+      expect(buildReportHtml(_survey()), contains('<td>Spessore muri</td><td>—</td>'));
     });
 
-    test('M3: tutte le label umane (+ escaping della pennetta <)', () {
-      expect(
-        buildReportHtml(_survey(wall: '<30cm')),
-        contains('<td>Sottile — &lt;30 cm</td>'),
-      );
-      expect(
-        buildReportHtml(_survey(wall: '>40cm')),
-        contains('<td>Spesso — &gt;40 cm</td>'),
-      );
-      // Nessuna selezione → trattino, non il valore grezzo.
-      expect(
-        buildReportHtml(_survey()),
-        contains('<td>Spessore muri</td><td>—</td>'),
-      );
+    test('risultato: classe, indici, consumi, interventi escapati, assunzioni', () {
+      final html = buildReportHtml(_survey(result: _result));
+      expect(html, contains('>E</div>'));
+      expect(html, contains('120,5 kWh/m²anno'));
+      expect(html, contains('52,4 kWh/m²anno'));
+      expect(html, contains('Milano (MI)'));
+      expect(html, contains('€ 1.152'));
+      expect(html, contains('Cappotto &lt;12 cm&gt;'));
+      expect(html, contains('Dati non rilevati'));
+      expect(html, contains('Anno di costruzione'));
     });
 
-    test('M3: stringhe normative presenti, DPR 59/2009 assente', () {
-      final html = buildReportHtml(_survey(wall: '30-40cm'));
-
+    test('riferimenti normativi corretti, DPR 59/2009 assente', () {
+      final html = buildReportHtml(_survey(result: _result));
       expect(html, contains('D.Lgs. 192/2005'));
-      expect(html, contains('D.M. 26/06/2015 (UNI TS 11300)'));
-      expect(html, contains('lo spessore è un proxy della trasmittanza U'));
-      expect(html, contains('non definisce la classe APE'));
-
-      expect(html, isNot(contains('DPR 59/2009')));
+      expect(html, contains('DM 26/06/2015'));
+      expect(html, contains('UNI/TS 11300'));
+      expect(html, contains('Non sostituisce l\'attestato'));
       expect(html, isNot(contains('59/2009')));
+    });
+
+    test('senza stima: report comunque generato', () {
+      expect(buildReportHtml(_survey()), contains('Stima non disponibile.'));
     });
 
     test('M4: zero invio API – solo HTML autocontenuto, nessun endpoint', () {
