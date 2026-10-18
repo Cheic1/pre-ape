@@ -54,6 +54,21 @@ Authorization / IDOR (P1-A1 AC-3)
   another user answers 404 (no existence oracle), never 200. Creation always
   stamps user_id with the authenticated caller.
 
+Admin (app/api/v1/admin.py; admin = email in ADMIN_EMAILS, `is_admin` in the
+login/register response). 401 without token, 403 for non-admins. Every call
+except GET /admin/audit writes an admin_audit_log row (same transaction).
+  GET    /api/v1/admin/users                    -> 200 [AdminUser] (by email, with counts)
+  GET    /api/v1/admin/users/{id}/surveys       -> 200 [SurveySummary] | 404
+  DELETE /api/v1/admin/users/{id}?confirm_email= -> 204 | 404 | 409 self | 422 mismatch
+  GET    /api/v1/admin/surveys/{id}             -> 200 Survey | 404 (any owner)
+  PUT    /api/v1/admin/surveys/{id}             -> 200 Survey (SurveyUpdate, re-estimated)
+  DELETE /api/v1/admin/surveys/{id}             -> 204 | 404
+  GET    /api/v1/admin/surveys/{id}/documents   -> 200 [DocumentMeta] | 404
+  GET    /api/v1/admin/documents/{id}/content   -> 200 bytes | 404
+  DELETE /api/v1/admin/documents/{id}           -> 204 | 404
+  GET    /api/v1/admin/audit?limit=100&offset=0 -> 200 [AuditEntry] (newest first)
+  The normal /surveys endpoints stay owner-only for admins too.
+
 Errors: FastAPI default shape {"detail": ...} — 422 validation, 401 auth,
 404 not found OR not owned, 409 duplicate email, 429 rate limited.
 """

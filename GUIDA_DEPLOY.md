@@ -8,8 +8,15 @@ l'app web Flutter **e** l'API FastAPI sullo stesso indirizzo. Le servono solo:
 | `DATABASE_URL` | stringa di connessione Postgres (`postgresql://utente:password@host/db`) |
 | `SECRET_KEY` | stringa casuale lunga (firma dei login). Generala con `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `APP_ENV` | `production` |
+| `ADMIN_EMAILS` | (facoltativa) email degli amministratori separate da virgola, es. `io@studio.it,socio@studio.it`. Vuota = nessun admin |
 
 Senza `SECRET_KEY` valida l'app **si rifiuta di partire** (protezione voluta).
+
+**Amministratore.** Chi ha l'email in `ADMIN_EMAILS` vede il pannello
+"Amministrazione" (utenti, sopralluoghi e documenti di tutti, eliminazione
+utenti). L'account va prima registrato normalmente nell'app; dopo aver
+cambiato la variabile riavvia l'app (`docker compose up -d`, o redeploy su
+Render) e rifai il login. Ogni azione dell'admin resta nel "Registro accessi".
 
 ---
 
