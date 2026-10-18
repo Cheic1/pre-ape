@@ -48,6 +48,16 @@ Endpoints (path ids are UUIDs -> 422 when malformed, per-field validation)
   GET    /api/v1/surveys/{id}/results        -> 200 results | 404
   GET    /api/v1/surveys/{id}/photo-analyses -> 200 [PhotoAnalysis] | 404
   POST   /api/v1/photo-analyses              -> 201 | 404 (target survey must be owned)
+  GET    /api/v1/surveys/{id}/cened-sheet    -> 200 CenedSheet | 404 (app.api.v1.cened)
+
+Scheda CENED (app.core.cened.sheet): survey data ordered like the CENED+2.0
+screens, for copying into the software (no importable XML).
+  {survey_id, generated_at, disclaimer, sections: [{key, title, rows: [
+     {label, value: str|null, cened_field: "elemento@attributo"|null,
+      status: "ok" | "stimato" | "da_rilevare"}]}]}
+  section keys in order: edificio, subalterni, strutture_opache, serramenti,
+  impianti, documenti. "stimato" = engine default (energy_result.assunzioni) or
+  derived suggestion; "da_rilevare" = missing (value null).
 
 Authorization / IDOR (P1-A1 AC-3)
   Every survey read/update/delete filters on user_id: a survey belonging to
