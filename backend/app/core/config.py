@@ -67,6 +67,13 @@ class Settings(BaseSettings):
         description="Allowed CORS origins (JSON list when set via env)"
     )
 
+    # Admin: comma-separated emails with access to /api/v1/admin (no UI to grant it)
+    ADMIN_EMAILS: str = Field(default="", description="comma-separated admin emails")
+
+    @property
+    def admin_emails(self) -> frozenset[str]:
+        return frozenset(e.strip().lower() for e in self.ADMIN_EMAILS.split(",") if e.strip())
+
     # Rate limiting (auth endpoints, per client IP)
     AUTH_RATE_LIMIT_PER_MINUTE: int = 10
     

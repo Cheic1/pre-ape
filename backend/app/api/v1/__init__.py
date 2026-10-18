@@ -70,7 +70,9 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core import energy
+from app.core.catasto import CadastralUnit, MAX_CADASTRAL_UNITS
 from app.core.energy import BuildingInputs, climate
+from app.core.config import settings
 from app.core.rate_limit import auth_rate_limiter, client_ip
 from app.core.security import (
     create_access_token,
@@ -156,6 +158,7 @@ class TokenResponse(BaseModel):
     user_id: UUID
     email: str
     name: str
+    is_admin: bool = False
 
 _unauthorized = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -192,6 +195,11 @@ def get_current_user(
     if user is None:
         raise _unauthorized
     return user
+
+def is_admin(user: User) -> bool:
+    """Admin = email listed in settings.ADMIN_EMAILS (no UI to grant the role)."""
+    return bool(user.email) and user.email.lower() in settings.admin_emails
+
 
 # API Schemas
 # Photo limits (MVP: photos travel inline as data-URLs and are stored in the
@@ -235,6 +243,7 @@ class SurveyBase(BaseModel):
     generator_power_kw: Optional[float] = Field(default=None, ge=0)
     generator_year: Optional[int] = Field(default=None, ge=1900, le=2100)
     building: Optional[BuildingInputs] = None
+    cadastral: Optional[List[CadastralUnit]] = Field(default=None, max_length=MAX_CADASTRAL_UNITS)
     photos: Optional[Dict[str, str]] = None
     additional_photos: Optional[List[str]] = None
     status: Optional[SurveyStatus] = None
@@ -422,6 +431,7 @@ async def register(
         user_id=user.id,
         email=user.email,
         name=user.name,
+        is_admin=is_admin(user),
     )
 
 @router.post(
@@ -458,6 +468,7 @@ async def login(
         user_id=user.id,
         email=user.email,
         name=user.name,
+        is_admin=is_admin(user),
     )
 
 # API Endpoints (all require Authorization: Bearer <JWT>)
@@ -717,3 +728,11 @@ async def analyze_generator_photo(survey_id: str):
         logger.info(f"Completed AI analysis for survey {survey_id}")
     except Exception as e:
         logger.error(f"Error in AI analysis for survey {survey_id}: {str(e)}")
+
+
+# Sub-routers (imported last: they depend on get_db / get_current_user above).
+from app.api.v1 import admin, cened, documents  # noqa: E402
+
+router.include_router(documents.router)
+router.include_router(admin.router)
+router.include_router(cened.router)

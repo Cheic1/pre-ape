@@ -23,6 +23,7 @@ _ADDITIVE_MIGRATIONS = (
     "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS additional_photos JSON",
     "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS building JSON",
     "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS energy_result JSON",
+    "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS cadastral JSON",
 )
 
 # Max request body: 14 photos × ~1 MB data-URL + JSON fields.

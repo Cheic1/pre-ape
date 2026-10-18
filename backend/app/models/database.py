@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, create_engine
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, LargeBinary, create_engine
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, sessionmaker, declarative_base
 from app.core.config import settings
@@ -83,6 +83,10 @@ class Survey(Base):
     building = Column(JSON)
     energy_result = Column(JSON)
 
+    # Dati catastali confermati dal tecnico: lista di unità immobiliari
+    # (schema app.core.catasto.CadastralUnit).
+    cadastral = Column(JSON)
+
     # Results
     estimated_class = Column(String(5))
     energy_score = Column(Float)
@@ -93,6 +97,55 @@ class Survey(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     user = relationship("User", back_populates="surveys")
+    documents = relationship(
+        "SurveyDocument",
+        back_populates="survey",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class SurveyDocument(Base):
+    """Documento catastale allegato a un sopralluogo (visura, planimetria…).
+
+    Il contenuto sta in una tabella separata (non nel JSON del sopralluogo) così
+    elenco e salvataggi del wizard restano leggeri.
+    """
+    __tablename__ = "survey_documents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    survey_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("surveys.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Chi l'ha caricato (resta anche se il sopralluogo venisse condiviso).
+    uploaded_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    kind = Column(String(20), nullable=False)  # visura | planimetria | mappa | altro
+    filename = Column(String(255), nullable=False)
+    mime_type = Column(String(50), nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+    content = Column(LargeBinary, nullable=False)
+    # Proposta estratta dalla visura (lista di CadastralUnit) o null.
+    extracted = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    survey = relationship("Survey", back_populates="documents")
+
+
+class AdminAuditLog(Base):
+    """Ogni azione admin (anche le letture) su dati di altri utenti."""
+    __tablename__ = "admin_audit_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    admin_email = Column(String(255), nullable=False)  # snapshot: resta se l'admin è cancellato
+    action = Column(String(50), nullable=False)  # es. list_users, view_survey, delete_user
+    target_type = Column(String(30))  # user | survey | document
+    target_id = Column(String(64))
+    detail = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
 class PhotoAnalysis(Base):
