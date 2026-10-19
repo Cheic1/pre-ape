@@ -6,10 +6,17 @@
 =============================================================================
 
 Authentication
-  POST /api/v1/auth/register  {email, password(>=8), name?}
-      -> 201 {access_token, token_type: "bearer", user_id, email, name}  (409 if email taken)
+  POST /api/v1/auth/register  {email, password(>=8), name?, accept_terms: true}
+      -> 201 {access_token, token_type: "bearer", user_id, email, name, is_admin,
+              terms_accepted}  (409 if email taken; 422 if accept_terms missing/false)
+      accept_terms = accepts Termini d'uso + DPA and acknowledges the privacy
+      notice; the server stores users.terms_version (= LEGAL_VERSION) + timestamp.
   POST /api/v1/auth/login     {email, password}
-      -> 200 {access_token, token_type: "bearer", user_id, email, name}  (401 if wrong)
+      -> 200 {access_token, token_type: "bearer", user_id, email, name, is_admin,
+              terms_accepted}  (401 if wrong)
+      terms_accepted is false when the user accepted an older LEGAL_VERSION (or
+      never): the app shows a blocking dialog; the API itself does not block.
+  POST /api/v1/auth/accept-terms  (auth) -> 200 {terms_accepted: true, version}
   Every /surveys and /photo-analyses call requires the header:
       Authorization: Bearer <access_token>
   The scheme is matched strictly (uppercase `Bearer`): `Token x`, `bearer x`
@@ -59,6 +66,12 @@ screens, for copying into the software (no importable XML).
   impianti, documenti. "stimato" = engine default (energy_result.assunzioni) or
   derived suggestion; "da_rilevare" = missing (value null).
 
+Legal documents (app.legal, Markdown in backend/app/legal/*.md, no auth)
+  GET /api/v1/legal/{doc}   doc in privacy | termini | dpa (else 422)
+      -> 200 {doc, title, version, markdown, complete: bool}
+  {{PLACEHOLDER}}s are filled from the LEGAL_* settings; unfilled ones render as
+  "[da completare: NAME]" and complete=false (the app shows a "bozza" banner).
+
 Authorization / IDOR (P1-A1 AC-3)
   Every survey read/update/delete filters on user_id: a survey belonging to
   another user answers 404 (no existence oracle), never 200. Creation always
@@ -99,6 +112,7 @@ from app.core.catasto import CadastralUnit, MAX_CADASTRAL_UNITS
 from app.core.energy import BuildingInputs, climate
 from app.core.config import settings
 from app.core.rate_limit import auth_rate_limiter, client_ip
+from app import legal
 from app.core.security import (
     create_access_token,
     decode_token,
@@ -172,6 +186,16 @@ class RegisterRequest(BaseModel):
     email: str = Field(min_length=5, max_length=255, examples=["user@example.com"])
     password: str = Field(min_length=8, max_length=128, examples=["S3cure-Pass!"])
     name: Optional[str] = Field(default=None, max_length=255)
+    # Accettazione di Termini d'uso + Accordo sul trattamento dei dati (DPA) e
+    # presa visione dell'Informativa privacy (versione app.legal.LEGAL_VERSION).
+    accept_terms: bool
+
+    @field_validator("accept_terms")
+    @classmethod
+    def _must_accept(cls, value: bool) -> bool:
+        if value is not True:
+            raise ValueError("terms must be accepted")
+        return value
 
 class LoginRequest(BaseModel):
     email: str = Field(min_length=5, max_length=255)
@@ -184,6 +208,20 @@ class TokenResponse(BaseModel):
     email: str
     name: str
     is_admin: bool = False
+    # False when the user has not accepted the current LEGAL_VERSION: the app
+    # asks for acceptance (POST /auth/accept-terms); the server does not block.
+    terms_accepted: bool = False
+
+class AcceptTermsResponse(BaseModel):
+    terms_accepted: bool
+    version: str
+
+class LegalDocument(BaseModel):
+    doc: str
+    title: str
+    version: str
+    markdown: str
+    complete: bool
 
 _unauthorized = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -220,6 +258,19 @@ def get_current_user(
     if user is None:
         raise _unauthorized
     return user
+
+def terms_accepted(user: User) -> bool:
+    return user.terms_version == legal.LEGAL_VERSION
+
+def _token_response(user: User) -> TokenResponse:
+    return TokenResponse(
+        access_token=create_access_token(user.id),
+        user_id=user.id,
+        email=user.email,
+        name=user.name,
+        is_admin=is_admin(user),
+        terms_accepted=terms_accepted(user),
+    )
 
 def is_admin(user: User) -> bool:
     """Admin = email listed in settings.ADMIN_EMAILS (no UI to grant the role)."""
@@ -441,6 +492,8 @@ async def register(
         email=email,
         name=(payload.name or email.split("@", 1)[0])[:255],
         password_hash=hash_password(payload.password),
+        terms_version=legal.LEGAL_VERSION,
+        terms_accepted_at=datetime.utcnow(),
     )
     db.add(user)
     try:
@@ -451,13 +504,7 @@ async def register(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
     db.refresh(user)
     logger.info(f"Registered user {user.id}")
-    return TokenResponse(
-        access_token=create_access_token(user.id),
-        user_id=user.id,
-        email=user.email,
-        name=user.name,
-        is_admin=is_admin(user),
-    )
+    return _token_response(user)
 
 @router.post(
     "/auth/login",
@@ -488,13 +535,28 @@ async def login(
         )
     user.last_login = datetime.utcnow()
     db.commit()
-    return TokenResponse(
-        access_token=create_access_token(user.id),
-        user_id=user.id,
-        email=user.email,
-        name=user.name,
-        is_admin=is_admin(user),
-    )
+    return _token_response(user)
+
+@router.post("/auth/accept-terms", response_model=AcceptTermsResponse)
+async def accept_terms(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Record acceptance of the current Termini d'uso + DPA (LEGAL_VERSION)."""
+    current_user.terms_version = legal.LEGAL_VERSION
+    current_user.terms_accepted_at = datetime.utcnow()
+    db.commit()
+    return AcceptTermsResponse(terms_accepted=True, version=legal.LEGAL_VERSION)
+
+# ---------------------------------------------------------------------------
+# Legal documents (public, no auth)
+# ---------------------------------------------------------------------------
+@router.get("/legal/{doc}", response_model=LegalDocument)
+async def get_legal_document(doc: Literal["privacy", "termini", "dpa"]):
+    rendered = legal.render(doc, legal.placeholder_values(settings))
+    if rendered is None:  # unreachable with the Literal, kept defensive
+        raise HTTPException(status_code=404, detail="Document not found")
+    return rendered
 
 # API Endpoints (all require Authorization: Bearer <JWT>)
 @router.post("/surveys", response_model=SurveyResponse, status_code=status.HTTP_201_CREATED)

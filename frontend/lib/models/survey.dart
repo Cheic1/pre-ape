@@ -315,6 +315,7 @@ class AuthToken {
     required this.userId,
     required this.email,
     required this.name,
+    this.termsAccepted = false,
   });
 
   factory AuthToken.fromJson(Map<String, dynamic> json) => AuthToken(
@@ -323,6 +324,7 @@ class AuthToken {
         userId: json['user_id'] as String,
         email: json['email'] as String? ?? '',
         name: json['name'] as String? ?? '',
+        termsAccepted: json['terms_accepted'] as bool? ?? false,
       );
 
   final String accessToken;
@@ -330,4 +332,7 @@ class AuthToken {
   final String userId;
   final String email;
   final String name;
+
+  /// L'utente ha accettato la versione corrente di Termini d'uso + DPA.
+  final bool termsAccepted;
 }

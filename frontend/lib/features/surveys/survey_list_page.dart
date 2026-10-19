@@ -4,6 +4,7 @@ import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/features/auth/auth_provider.dart';
+import 'package:pre_ape/features/legal/terms_gate.dart';
 import 'package:pre_ape/features/onboarding/onboarding_page.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
 import 'package:pre_ape/features/widgets/energy_gauge.dart';
@@ -140,6 +141,7 @@ class _SurveyListPageState extends ConsumerState<SurveyListPage> {
             color: AppColors.surface,
             onSelected: (v) {
               if (v == 'logout') ref.read(authProvider).logout();
+              if (v == 'legal') showLegalDocumentsSheet(context);
             },
             itemBuilder: (_) => [
               PopupMenuItem<String>(
@@ -150,6 +152,14 @@ class _SurveyListPageState extends ConsumerState<SurveyListPage> {
                 ),
               ),
               const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'legal',
+                child: Row(children: [
+                  Icon(Icons.policy_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Privacy e termini'),
+                ]),
+              ),
               const PopupMenuItem<String>(
                 value: 'logout',
                 child: Row(children: [

@@ -43,6 +43,7 @@ class AuthNotifier extends ChangeNotifier {
   static const _kUserId = 'preape.user_id';
   static const _kEmail = 'preape.email';
   static const _kName = 'preape.name';
+  static const _kTermsAccepted = 'preape.terms_accepted';
 
   final ApiClient _api;
   final Future<SharedPreferences> Function() _prefs;
@@ -51,6 +52,10 @@ class AuthNotifier extends ChangeNotifier {
   AuthUser? _user;
   bool _busy = false;
   String? _error;
+  bool _termsAccepted = false;
+
+  /// False → l'app chiede di accettare Termini d'uso + DPA (versione corrente).
+  bool get termsAccepted => _termsAccepted;
 
   AuthStatus get status => _status;
   AuthUser? get user => _user;
@@ -74,6 +79,7 @@ class AuthNotifier extends ChangeNotifier {
           email: prefs.getString(_kEmail) ?? '',
           name: prefs.getString(_kName) ?? '',
         );
+        _termsAccepted = prefs.getBool(_kTermsAccepted) ?? false;
         _status = AuthStatus.signedIn;
       } else {
         _status = AuthStatus.signedOut;
@@ -87,12 +93,39 @@ class AuthNotifier extends ChangeNotifier {
   Future<bool> login(String email, String password) =>
       _authenticate(() => _api.login(email: email.trim(), password: password));
 
-  Future<bool> register(String email, String password, {String? name}) =>
+  Future<bool> register(String email, String password,
+          {String? name, bool acceptTerms = false}) =>
       _authenticate(() => _api.register(
             email: email.trim(),
             password: password,
             name: (name == null || name.trim().isEmpty) ? null : name.trim(),
+            acceptTerms: acceptTerms,
           ));
+
+  /// Accetta la versione corrente dei documenti legali (POST /auth/accept-terms).
+  /// Un 401 riporta al login; altri errori → `false` + [error].
+  Future<bool> acceptTerms() async {
+    _error = null;
+    try {
+      await _api.acceptTerms();
+    } on UnauthorizedException {
+      await handleUnauthorized();
+      return false;
+    } on ApiException catch (e) {
+      _error = describeAuthError(e);
+      notifyListeners();
+      return false;
+    }
+    _termsAccepted = true;
+    notifyListeners();
+    try {
+      final prefs = await _prefs();
+      await prefs.setBool(_kTermsAccepted, true);
+    } catch (_) {
+      // storage non disponibile: vale per questa sessione
+    }
+    return true;
+  }
 
   Future<bool> _authenticate(Future<dynamic> Function() call) async {
     _busy = true;
@@ -101,6 +134,7 @@ class AuthNotifier extends ChangeNotifier {
     try {
       final auth = await call();
       _user = AuthUser(id: auth.userId, email: auth.email, name: auth.name);
+      _termsAccepted = auth.termsAccepted;
       _status = AuthStatus.signedIn;
       await _persist(auth.accessToken);
       return true;
@@ -129,6 +163,7 @@ class AuthNotifier extends ChangeNotifier {
         prefs.remove(_kUserId),
         prefs.remove(_kEmail),
         prefs.remove(_kName),
+        prefs.remove(_kTermsAccepted),
       ]);
     } catch (_) {
       // storage non disponibile: la sessione in memoria è comunque chiusa
@@ -157,6 +192,7 @@ class AuthNotifier extends ChangeNotifier {
         prefs.setString(_kUserId, user.id),
         prefs.setString(_kEmail, user.email),
         prefs.setString(_kName, user.name),
+        prefs.setBool(_kTermsAccepted, _termsAccepted),
       ]);
     } catch (_) {
       // es. navigazione privata: si resta loggati solo per questa sessione

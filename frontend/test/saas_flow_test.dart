@@ -347,6 +347,7 @@ void main() {
         child: const MaterialApp(home: LoginPage()),
       ));
 
+      await tester.ensureVisible(find.byKey(const ValueKey('login_submit')));
       await tester.tap(find.byKey(const ValueKey('login_submit')));
       await tester.pump();
       expect(find.text('Inserisci la tua email'), findsOneWidget);
@@ -355,10 +356,15 @@ void main() {
       await tester.tap(find.text('Non hai un account? Registrati gratis'));
       await tester.pump();
       expect(find.text('Crea il tuo account'), findsOneWidget);
+      // registrazione: consenso obbligatorio prima di poter inviare
+      await tester.ensureVisible(find.byKey(const ValueKey('register_accept_terms')));
+      await tester.tap(find.byKey(const ValueKey('register_accept_terms')));
+      await tester.pump();
 
       await tester.enterText(
           find.byKey(const ValueKey('login_email')), 'geo@example.com');
       await tester.enterText(find.byKey(const ValueKey('login_password')), 'corta');
+      await tester.ensureVisible(find.byKey(const ValueKey('login_submit')));
       await tester.tap(find.byKey(const ValueKey('login_submit')));
       await tester.pump();
       expect(find.text('Almeno 8 caratteri'), findsOneWidget);
@@ -366,6 +372,7 @@ void main() {
 
       await tester.enterText(
           find.byKey(const ValueKey('login_password')), 'password-lunga');
+      await tester.ensureVisible(find.byKey(const ValueKey('login_submit')));
       await tester.tap(find.byKey(const ValueKey('login_submit')));
       await tester.pumpAndSettle();
       expect(requests, 1);
