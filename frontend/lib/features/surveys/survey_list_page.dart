@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
+import 'package:pre_ape/features/admin/admin_pages.dart';
 import 'package:pre_ape/features/auth/auth_provider.dart';
 import 'package:pre_ape/features/onboarding/onboarding_page.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
@@ -55,6 +56,13 @@ class _SurveyListPageState extends ConsumerState<SurveyListPage> {
   Future<void> _openWizard() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const OnboardingPage()),
+    );
+    if (mounted) _refresh();
+  }
+
+  Future<void> _openAdmin() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const AdminUsersPage()),
     );
     if (mounted) _refresh();
   }
@@ -140,6 +148,7 @@ class _SurveyListPageState extends ConsumerState<SurveyListPage> {
             color: AppColors.surface,
             onSelected: (v) {
               if (v == 'logout') ref.read(authProvider).logout();
+              if (v == 'admin') _openAdmin();
             },
             itemBuilder: (_) => [
               PopupMenuItem<String>(
@@ -150,6 +159,16 @@ class _SurveyListPageState extends ConsumerState<SurveyListPage> {
                 ),
               ),
               const PopupMenuDivider(),
+              if (user?.isAdmin ?? false)
+                const PopupMenuItem<String>(
+                  key: ValueKey('menu_admin'),
+                  value: 'admin',
+                  child: Row(children: [
+                    Icon(Icons.admin_panel_settings_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Amministrazione'),
+                  ]),
+                ),
               const PopupMenuItem<String>(
                 value: 'logout',
                 child: Row(children: [

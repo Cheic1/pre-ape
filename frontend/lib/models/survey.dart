@@ -337,6 +337,7 @@ class AuthToken {
     required this.userId,
     required this.email,
     required this.name,
+    this.isAdmin = false,
   });
 
   factory AuthToken.fromJson(Map<String, dynamic> json) => AuthToken(
@@ -345,6 +346,7 @@ class AuthToken {
         userId: json['user_id'] as String,
         email: json['email'] as String? ?? '',
         name: json['name'] as String? ?? '',
+        isAdmin: json['is_admin'] as bool? ?? false,
       );
 
   final String accessToken;
@@ -352,4 +354,7 @@ class AuthToken {
   final String userId;
   final String email;
   final String name;
+
+  /// Email in `ADMIN_EMAILS` lato server (pannello amministrazione).
+  final bool isAdmin;
 }
