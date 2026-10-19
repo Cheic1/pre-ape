@@ -48,6 +48,16 @@ Endpoints (path ids are UUIDs -> 422 when malformed, per-field validation)
   GET    /api/v1/surveys/{id}/results        -> 200 results | 404
   GET    /api/v1/surveys/{id}/photo-analyses -> 200 [PhotoAnalysis] | 404
   POST   /api/v1/photo-analyses              -> 201 | 404 (target survey must be owned)
+  GET    /api/v1/surveys/{id}/cened-sheet    -> 200 CenedSheet | 404 (app.api.v1.cened)
+
+Scheda CENED (app.core.cened.sheet): survey data ordered like the CENED+2.0
+screens, for copying into the software (no importable XML).
+  {survey_id, generated_at, disclaimer, sections: [{key, title, rows: [
+     {label, value: str|null, cened_field: "elemento@attributo"|null,
+      status: "ok" | "stimato" | "da_rilevare"}]}]}
+  section keys in order: edificio, subalterni, strutture_opache, serramenti,
+  impianti, documenti. "stimato" = engine default (energy_result.assunzioni) or
+  derived suggestion; "da_rilevare" = missing (value null).
 
 Cadastral documents (app/api/v1/documents.py; owner only, others -> 404)
   POST   /api/v1/surveys/{id}/documents
@@ -68,6 +78,21 @@ Authorization / IDOR (P1-A1 AC-3)
   Every survey read/update/delete filters on user_id: a survey belonging to
   another user answers 404 (no existence oracle), never 200. Creation always
   stamps user_id with the authenticated caller.
+
+Admin (app/api/v1/admin.py; admin = email in ADMIN_EMAILS, `is_admin` in the
+login/register response). 401 without token, 403 for non-admins. Every call
+except GET /admin/audit writes an admin_audit_log row (same transaction).
+  GET    /api/v1/admin/users                    -> 200 [AdminUser] (by email, with counts)
+  GET    /api/v1/admin/users/{id}/surveys       -> 200 [SurveySummary] | 404
+  DELETE /api/v1/admin/users/{id}?confirm_email= -> 204 | 404 | 409 self | 422 mismatch
+  GET    /api/v1/admin/surveys/{id}             -> 200 Survey | 404 (any owner)
+  PUT    /api/v1/admin/surveys/{id}             -> 200 Survey (SurveyUpdate, re-estimated)
+  DELETE /api/v1/admin/surveys/{id}             -> 204 | 404
+  GET    /api/v1/admin/surveys/{id}/documents   -> 200 [DocumentMeta] | 404
+  GET    /api/v1/admin/documents/{id}/content   -> 200 bytes | 404
+  DELETE /api/v1/admin/documents/{id}           -> 204 | 404
+  GET    /api/v1/admin/audit?limit=100&offset=0 -> 200 [AuditEntry] (newest first)
+  The normal /surveys endpoints stay owner-only for admins too.
 
 Errors: FastAPI default shape {"detail": ...} — 422 validation, 401 auth,
 404 not found OR not owned, 409 duplicate email, 429 rate limited.

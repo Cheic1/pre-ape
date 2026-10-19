@@ -55,6 +55,9 @@ def _purge_test_data() -> None:
             {"like": like},
         )
         conn.execute(text("DELETE FROM users WHERE email LIKE :like"), {"like": like})
+        conn.execute(
+            text("DELETE FROM admin_audit_log WHERE admin_email LIKE :like"), {"like": like}
+        )
 
 
 @pytest.fixture(scope="session", autouse=True)
