@@ -125,6 +125,54 @@ void main() {
     expect(sheet.sections.single.rows.single.missing, isTrue);
   });
 
+  group('downloadCenedXml', () {
+    test('GET ?format=2.0, byte + nome da Content-Disposition RFC 5987', () async {
+      final seen = <http.Request>[];
+      final xml = utf8.encode('<?xml version="1.0"?><calcolo/>');
+      final api = _client(
+          (_) async => http.Response.bytes(xml, 200, headers: const {
+                'content-type': 'application/xml',
+                'content-disposition':
+                    "attachment; filename*=UTF-8''cened%20s-1_2.0.xml",
+              }),
+          seen: seen);
+      final file = await api.downloadCenedXml('s-1', '2.0');
+      expect(seen.single.method, 'GET');
+      expect(seen.single.url.path, '/api/v1/surveys/s-1/cened-xml');
+      expect(seen.single.url.queryParameters, {'format': '2.0'});
+      expect(_header(seen.single, 'authorization'), 'Bearer jwt');
+      expect(file.bytes, xml);
+      expect(file.filename, 'cened s-1_2.0.xml');
+    });
+
+    test('format=1.2, filename="…" semplice o fallback senza header', () async {
+      final seen = <http.Request>[];
+      var withHeader = true;
+      final api = _client(
+          (_) async => http.Response('<x/>', 200,
+              headers: withHeader
+                  ? const {'content-disposition': 'attachment; filename="vecchio.xml"'}
+                  : const {}),
+          seen: seen);
+      expect((await api.downloadCenedXml('s-1', '1.2')).filename, 'vecchio.xml');
+      expect(seen.single.url.queryParameters['format'], '1.2');
+      withHeader = false;
+      expect((await api.downloadCenedXml('s-1', '1.2')).filename,
+          'cened_s-1_1.2.xml');
+    });
+
+    test('401 → UnauthorizedException, 404 → NotFoundException', () async {
+      await expectLater(
+          _client((_) async => _json({'detail': 'x'}, 401))
+              .downloadCenedXml('s-1', '2.0'),
+          throwsA(isA<UnauthorizedException>()));
+      await expectLater(
+          _client((_) async => _json({'detail': 'x'}, 404))
+              .downloadCenedXml('s-1', '2.0'),
+          throwsA(isA<NotFoundException>()));
+    });
+  });
+
   group('errori', () {
     test('401 → UnauthorizedException (upload, download, cened)', () async {
       final api =

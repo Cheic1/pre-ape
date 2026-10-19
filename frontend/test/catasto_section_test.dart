@@ -271,6 +271,38 @@ void main() {
       expect(deco('cened_row_edificio_0').color, isNull);
     });
 
+    testWidgets('pulsanti XML CENED 2.0 / 1.2 scaricano il formato scelto',
+        (tester) async {
+      final backend = _FakeBackend({
+        'GET /api/v1/surveys/s-1/cened-sheet': (_) => _json(sheetJson, 200),
+        'GET /api/v1/surveys/s-1/cened-xml': (r) => http.Response('<x/>', 200,
+            headers: {
+              'content-disposition':
+                  'attachment; filename="cened_${r.url.queryParameters['format']}.xml"',
+            }),
+      });
+      final n = SurveyNotifier()
+        ..loadFrom(SurveyRead.fromJson(_surveyJson('s-1')));
+      await _pump(tester, const CenedSheetCard(), backend.client(), notifier: n);
+      expect(find.text('Scarica XML CENED 2.0'), findsOneWidget);
+      expect(find.text('Scarica XML CENED 1.2 (formato precedente)'),
+          findsOneWidget);
+      expect(find.textContaining('File → Importa file XML'), findsOneWidget);
+      expect(find.textContaining('Il calcolo dell\'APE resta a carico di CENED'),
+          findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('cened_xml_2.0')));
+      await tester.pumpAndSettle();
+      expect(find.text('File XML scaricato: cened_2.0.xml'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('cened_xml_1.2')));
+      await tester.pumpAndSettle();
+      final formats = backend.requests
+          .where((r) => r.url.path.endsWith('/cened-xml'))
+          .map((r) => r.url.queryParameters['format'])
+          .toList();
+      expect(formats, ['2.0', '1.2']);
+    });
+
     testWidgets('sopralluogo nuovo: "Genera" salva prima e poi carica',
         (tester) async {
       final backend = _FakeBackend({

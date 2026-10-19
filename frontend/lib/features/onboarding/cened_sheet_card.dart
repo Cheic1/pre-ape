@@ -1,5 +1,6 @@
 /// Step 6 – "Scheda CENED": i dati salvati del sopralluogo ordinati come le
-/// schermate di CENED+2.0, da ricopiare nel software (nessun XML: vedi spec).
+/// schermate di CENED+2.0, da ricopiare nel software, più il download dei
+/// file XML di prova per l'importazione (il calcolo APE resta a CENED).
 library;
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,8 @@ import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/features/auth/auth_provider.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
 import 'package:pre_ape/features/onboarding/survey_save.dart';
+import 'package:pre_ape/features/web/web_download_stub.dart'
+    if (dart.library.js_interop) 'package:pre_ape/features/web/web_download.dart';
 import 'package:pre_ape/models/survey.dart';
 import 'package:pre_ape/services/api_client.dart';
 
@@ -38,6 +41,7 @@ class _CenedSheetCardState extends ConsumerState<CenedSheetCard> {
   CenedSheet? _sheet;
   bool _loading = false;
   String? _error;
+  bool _xmlBusy = false;
 
   @override
   void initState() {
@@ -70,6 +74,41 @@ class _CenedSheetCardState extends ConsumerState<CenedSheetCard> {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Scarica il file XML CENED ([format] `2.0` | `1.2`) dei dati salvati.
+  Future<void> _downloadXml(String format) async {
+    if (_xmlBusy) return;
+    setState(() => _xmlBusy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final n = ref.read(surveyProvider);
+      if (n.data.surveyId == null || n.dirty) {
+        final ok = await saveSurvey(context, ref, quiet: true);
+        if (!ok || !mounted) return;
+      }
+      final id = ref.read(surveyProvider).data.surveyId!;
+      final file =
+          await ref.read(apiClientProvider).downloadCenedXml(id, format);
+      downloadBytesFile(file.filename, file.bytes, 'application/xml');
+      messenger.showSnackBar(SnackBar(
+        content: Text('File XML scaricato: ${file.filename}'),
+        backgroundColor: AppColors.primaryDark,
+      ));
+    } on UnauthorizedException {
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      await ref.read(authProvider).handleUnauthorized();
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(e.statusCode == 0
+            ? 'Server non raggiungibile.'
+            : 'XML CENED non disponibile (${e.statusCode}): ${e.message}'),
+        backgroundColor: AppColors.error,
+      ));
+    } finally {
+      if (mounted) setState(() => _xmlBusy = false);
     }
   }
 
@@ -120,6 +159,31 @@ class _CenedSheetCardState extends ConsumerState<CenedSheetCard> {
                 style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error)),
           ],
           if (sheet != null) ..._sheetBody(sheet),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              OutlinedButton.icon(
+                key: const ValueKey('cened_xml_2.0'),
+                onPressed: _xmlBusy ? null : () => _downloadXml('2.0'),
+                icon: const Icon(Icons.code, size: 18),
+                label: const Text('Scarica XML CENED 2.0'),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('cened_xml_1.2'),
+                onPressed: _xmlBusy ? null : () => _downloadXml('1.2'),
+                icon: const Icon(Icons.code, size: 18),
+                label: const Text('Scarica XML CENED 1.2 (formato precedente)'),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'File di prova per l\'importazione in CENED+2.0 (File → Importa '
+            'file XML). Il calcolo dell\'APE resta a carico di CENED.',
+            style: AppTextStyles.bodySmall,
+          ),
         ],
       ),
     );
