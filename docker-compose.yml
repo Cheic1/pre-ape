@@ -17,6 +17,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
       DATABASE_URL: postgresql://preape:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/pre_ape
       CORS_ORIGINS: '["https://preape.cheic2.it"]'
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
     ports:
       - "127.0.0.1:${APP_PORT:-7032}:7031"
 
