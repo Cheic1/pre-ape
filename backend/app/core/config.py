@@ -1,3 +1,5 @@
+import base64
+import binascii
 import os
 from pydantic_settings import BaseSettings
 from pydantic import Field, model_validator
@@ -5,6 +7,19 @@ from pydantic import Field, model_validator
 # Placeholder values that must never ship outside development (M1 fail-fast).
 SECRET_KEY_PLACEHOLDER = "your-secret-key-change-in-production"
 _PLACEHOLDER_SECRETS = frozenset({"", SECRET_KEY_PLACEHOLDER, "changeme", "change-me"})
+
+
+def _decode_documents_key(value: str) -> bytes | None:
+    """base64 (urlsafe or standard, padding optional) of exactly 32 bytes, else None."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    value = value.replace("+", "-").replace("/", "_")
+    try:
+        key = base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    return key if len(key) == 32 else None
 
 class Settings(BaseSettings):
     # App
@@ -74,6 +89,24 @@ class Settings(BaseSettings):
     def admin_emails(self) -> frozenset[str]:
         return frozenset(e.strip().lower() for e in self.ADMIN_EMAILS.split(",") if e.strip())
 
+    # Documenti catastali cifrati a riposo (AES-256-GCM, app/core/crypto.py):
+    # base64 (urlsafe o standard) di 32 byte casuali. Vuota solo in development
+    # (chiave derivata da SECRET_KEY). Persa la chiave, i documenti sono persi.
+    DOCUMENTS_ENCRYPTION_KEY: str = Field(default="", description="base64 of 32 random bytes")
+
+    @property
+    def documents_key(self) -> bytes:
+        """32-byte AES key (validated at startup, see ``_check_documents_key``)."""
+        key = _decode_documents_key(self.DOCUMENTS_ENCRYPTION_KEY)
+        if key is not None:
+            return key
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+        return HKDF(
+            algorithm=hashes.SHA256(), length=32, salt=None, info=b"pre-ape-documents"
+        ).derive(self.SECRET_KEY.encode())
+
     # Rate limiting (auth endpoints, per client IP)
     AUTH_RATE_LIMIT_PER_MINUTE: int = 10
     
@@ -95,6 +128,27 @@ class Settings(BaseSettings):
             raise ValueError(
                 "SECRET_KEY is still a placeholder: set a strong SECRET_KEY "
                 "environment variable, or run with APP_ENV=development"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _check_documents_key(self):
+        """DOCUMENTS_ENCRYPTION_KEY must be a valid 32-byte key outside development.
+
+        In development an empty value falls back to a key derived from
+        SECRET_KEY (tests need no config); a non-empty invalid value is always
+        refused, so a typo never silently switches key.
+        """
+        raw = self.DOCUMENTS_ENCRYPTION_KEY.strip()
+        if raw and _decode_documents_key(raw) is None:
+            raise ValueError(
+                "DOCUMENTS_ENCRYPTION_KEY is invalid: it must be the base64 of 32 bytes"
+            )
+        if not raw and self.APP_ENV != "development":
+            raise ValueError(
+                "DOCUMENTS_ENCRYPTION_KEY is empty: generate one with "
+                "python -c \"import os,base64;print(base64.urlsafe_b64encode(os.urandom(32)).decode())\""
+                " or run with APP_ENV=development"
             )
         return self
 

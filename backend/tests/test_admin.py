@@ -4,6 +4,7 @@ import uuid
 import pytest
 
 from app.core.config import settings
+from app.core.crypto import encrypt_document
 from app.models.database import (
     AdminAuditLog,
     PhotoAnalysis,
@@ -41,7 +42,7 @@ def _add_document(survey_id: str, uploaded_by: str | None, kind: str = "visura")
             filename="visura è.pdf",
             mime_type="application/pdf",
             size_bytes=len(PDF_BYTES),
-            content=PDF_BYTES,
+            content=encrypt_document(PDF_BYTES),  # stored encrypted at rest
             extracted=[],
         )
         db.add(doc)

@@ -2,6 +2,8 @@
 import base64
 import uuid
 
+from sqlalchemy import text
+
 from conftest import create_survey
 from test_visura import VISURA_SINGOLA, _visura_pdf
 
@@ -175,6 +177,37 @@ class TestListDownloadDelete:
         assert response.headers["content-type"] == "application/pdf"
         assert response.headers["content-disposition"].startswith("attachment;")
         assert "mappa%20%C3%A8.pdf" in response.headers["content-disposition"]
+
+    def test_content_encrypted_at_rest(self, client, auth_a):
+        headers, _ = auth_a
+        sid = create_survey(client, headers)
+        doc_id = _upload(client, headers, sid, data=PDF, kind="mappa", filename="m.pdf").json()["id"]
+        with SessionLocal() as db:
+            raw = db.execute(
+                text("SELECT content, size_bytes FROM survey_documents WHERE id = :id"),
+                {"id": doc_id},
+            ).one()
+        stored = bytes(raw.content)
+        assert stored != PDF and PDF not in stored
+        assert stored.startswith(b"PAE1")
+        assert raw.size_bytes == len(PDF)  # plaintext size
+        response = client.get(f"/api/v1/documents/{doc_id}/content", headers=headers)
+        assert response.content == PDF
+
+    def test_tampered_content_500_without_leak(self, client, auth_a):
+        headers, _ = auth_a
+        sid = create_survey(client, headers)
+        doc_id = _upload(client, headers, sid, data=PDF, kind="mappa", filename="m.pdf").json()["id"]
+        with SessionLocal() as db:
+            doc = db.get(SurveyDocument, uuid.UUID(doc_id))
+            blob = bytearray(doc.content)
+            blob[-1] ^= 0x01
+            doc.content = bytes(blob)
+            db.commit()
+        response = client.get(f"/api/v1/documents/{doc_id}/content", headers=headers)
+        assert response.status_code == 500
+        assert b"%PDF" not in response.content
+        assert response.headers["content-type"].startswith("application/json")
 
     def test_download_delete_other_user_404(self, client, auth_a, auth_b):
         headers_a, _ = auth_a

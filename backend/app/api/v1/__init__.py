@@ -73,6 +73,9 @@ Cadastral documents (app/api/v1/documents.py; owner only, others -> 404)
   GET    /api/v1/documents/{doc_id}/content  -> 200 raw bytes (attachment) | 404
   DELETE /api/v1/documents/{doc_id}          -> 204 | 404
   Deleting a survey deletes its documents (FK ON DELETE CASCADE).
+  Content is encrypted at rest (AES-256-GCM, app.core.crypto, key
+  DOCUMENTS_ENCRYPTION_KEY); size_bytes is the plaintext size. An
+  undecryptable row answers 500 (logged, no content).
 
 Authorization / IDOR (P1-A1 AC-3)
   Every survey read/update/delete filters on user_id: a survey belonging to

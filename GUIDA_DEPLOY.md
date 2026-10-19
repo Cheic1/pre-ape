@@ -10,7 +10,18 @@ l'app web Flutter **e** l'API FastAPI sullo stesso indirizzo. Le servono solo:
 | `APP_ENV` | `production` |
 | `ADMIN_EMAILS` | (facoltativa) email degli amministratori separate da virgola, es. `io@studio.it,socio@studio.it`. Vuota = nessun admin |
 
-Senza `SECRET_KEY` valida l'app **si rifiuta di partire** (protezione voluta).
+| `DOCUMENTS_ENCRYPTION_KEY` | chiave di cifratura dei documenti catastali (32 byte in base64). Generala con `python -c "import os,base64;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"` |
+
+Senza `SECRET_KEY` e `DOCUMENTS_ENCRYPTION_KEY` valide l'app **si rifiuta di
+partire** (protezione voluta).
+
+**Chiave dei documenti: fanne una copia di sicurezza fuori dal server.** Visure,
+planimetrie ed estratti di mappa sono salvati nel database cifrati (AES-256-GCM)
+con `DOCUMENTS_ENCRYPTION_KEY`. Se la chiave va persa o cambiata, i documenti già
+caricati **non si possono più aprire in alcun modo** (nemmeno ripristinando un
+backup del database). Conservala in un gestore di password o su un supporto
+separato, insieme ai backup del DB; su Render copiala dal pannello *Environment*
+subito dopo il primo deploy.
 
 **Amministratore.** Chi ha l'email in `ADMIN_EMAILS` vede il pannello
 "Amministrazione" (utenti, sopralluoghi e documenti di tutti, eliminazione
@@ -52,7 +63,7 @@ database: **Supabase** al posto di Neon.
 ## Opzione B — Il tuo server di casa (Docker Compose)
 
 ```bash
-cp .env.example .env        # poi compila SECRET_KEY e POSTGRES_PASSWORD
+cp .env.example .env        # poi compila SECRET_KEY, POSTGRES_PASSWORD e DOCUMENTS_ENCRYPTION_KEY
 docker compose up -d --build
 ```
 

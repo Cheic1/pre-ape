@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.api.v1 import get_current_user, get_db
 from app.core.catasto import CadastralUnit
 from app.core.catasto.visura import parse_visura_pdf
+from app.core.crypto import DocumentDecryptionError, decrypt_document, encrypt_document
 from app.models.database import Survey, SurveyDocument, User
 
 logger = logging.getLogger(__name__)
@@ -69,9 +70,18 @@ def document_meta(doc: SurveyDocument, uploader=None) -> DocumentMeta:
 
 
 def document_content_response(doc: SurveyDocument) -> Response:
-    """Raw bytes as an attachment (RFC 5987 filename for non-ASCII names)."""
+    """Decrypted bytes as an attachment (RFC 5987 filename for non-ASCII names).
+
+    ``doc.content`` is encrypted at rest (app.core.crypto); an undecryptable
+    blob (tampered row, wrong key) is logged and answered with a bare 500.
+    """
+    try:
+        plain = decrypt_document(doc.content)
+    except DocumentDecryptionError:
+        logger.error("Documento %s non decifrabile", doc.id)
+        raise HTTPException(status_code=500, detail="Documento non leggibile")
     return Response(
-        content=doc.content,
+        content=plain,
         media_type=doc.mime_type,
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{quote(doc.filename)}",
@@ -177,9 +187,9 @@ async def upload_document(
         kind=body.kind,
         filename=body.filename,
         mime_type=mime,
-        size_bytes=len(data),
-        content=data,
-        extracted=_extract(body.kind, mime, data),
+        size_bytes=len(data),  # plaintext size
+        extracted=_extract(body.kind, mime, data),  # parsed before encryption
+        content=encrypt_document(data),
     )
     db.add(doc)
     db.commit()
