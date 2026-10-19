@@ -5,6 +5,12 @@ import 'package:pre_ape/features/auth/auth_provider.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
 import 'package:pre_ape/services/api_client.dart';
 
+/// Client used by [saveSurvey]. The admin panel overrides it in a nested
+/// `ProviderScope` around the wizard so that another user's survey is saved
+/// via `PUT /admin/surveys/{id}`; everyone else gets [apiClientProvider].
+final surveySaveApiProvider =
+    Provider<ApiClient>((ref) => ref.watch(apiClientProvider));
+
 /// Saves the wizard to the server and reports the outcome with a SnackBar.
 ///
 /// Returns true on success. On an expired session it goes back to the login
@@ -20,7 +26,7 @@ Future<bool> saveSurvey(
   try {
     await ref
         .read(surveyProvider)
-        .save(ref.read(apiClientProvider), complete: complete);
+        .save(ref.read(surveySaveApiProvider), complete: complete);
     if (!quiet) {
       messenger.showSnackBar(SnackBar(
         content: Text(complete

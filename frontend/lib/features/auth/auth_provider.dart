@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../models/survey.dart' show AuthToken;
 import '../../services/api_client.dart';
 
 /// Client API condiviso dall'intera app.
@@ -26,11 +27,19 @@ final authProvider = ChangeNotifierProvider<AuthNotifier>((ref) {
 
 /// Utente autenticato (dati minimi mostrati in UI).
 class AuthUser {
-  const AuthUser({required this.id, required this.email, required this.name});
+  const AuthUser({
+    required this.id,
+    required this.email,
+    required this.name,
+    this.isAdmin = false,
+  });
 
   final String id;
   final String email;
   final String name;
+
+  /// Accesso al pannello "Amministrazione" (il server verifica comunque).
+  final bool isAdmin;
 }
 
 enum AuthStatus { restoring, signedOut, signedIn }
@@ -43,6 +52,7 @@ class AuthNotifier extends ChangeNotifier {
   static const _kUserId = 'preape.user_id';
   static const _kEmail = 'preape.email';
   static const _kName = 'preape.name';
+  static const _kIsAdmin = 'preape.is_admin';
 
   final ApiClient _api;
   final Future<SharedPreferences> Function() _prefs;
@@ -73,6 +83,8 @@ class AuthNotifier extends ChangeNotifier {
           id: id,
           email: prefs.getString(_kEmail) ?? '',
           name: prefs.getString(_kName) ?? '',
+          // sessioni salvate prima del pannello admin: non admin
+          isAdmin: prefs.getBool(_kIsAdmin) ?? false,
         );
         _status = AuthStatus.signedIn;
       } else {
@@ -94,13 +106,18 @@ class AuthNotifier extends ChangeNotifier {
             name: (name == null || name.trim().isEmpty) ? null : name.trim(),
           ));
 
-  Future<bool> _authenticate(Future<dynamic> Function() call) async {
+  Future<bool> _authenticate(Future<AuthToken> Function() call) async {
     _busy = true;
     _error = null;
     notifyListeners();
     try {
       final auth = await call();
-      _user = AuthUser(id: auth.userId, email: auth.email, name: auth.name);
+      _user = AuthUser(
+        id: auth.userId,
+        email: auth.email,
+        name: auth.name,
+        isAdmin: auth.isAdmin,
+      );
       _status = AuthStatus.signedIn;
       await _persist(auth.accessToken);
       return true;
@@ -129,6 +146,7 @@ class AuthNotifier extends ChangeNotifier {
         prefs.remove(_kUserId),
         prefs.remove(_kEmail),
         prefs.remove(_kName),
+        prefs.remove(_kIsAdmin),
       ]);
     } catch (_) {
       // storage non disponibile: la sessione in memoria è comunque chiusa
@@ -157,6 +175,7 @@ class AuthNotifier extends ChangeNotifier {
         prefs.setString(_kUserId, user.id),
         prefs.setString(_kEmail, user.email),
         prefs.setString(_kName, user.name),
+        prefs.setBool(_kIsAdmin, user.isAdmin),
       ]);
     } catch (_) {
       // es. navigazione privata: si resta loggati solo per questa sessione
