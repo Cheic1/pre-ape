@@ -59,6 +59,24 @@ screens, for copying into the software (no importable XML).
   impianti, documenti. "stimato" = engine default (energy_result.assunzioni) or
   derived suggestion; "da_rilevare" = missing (value null).
 
+Cadastral documents (app/api/v1/documents.py; owner only, others -> 404)
+  POST   /api/v1/surveys/{id}/documents
+         {kind: "visura"|"planimetria"|"mappa"|"altro", filename (1..255), content_base64}
+                                             -> 201 DocumentMeta | 404 | 409 (>10 docs)
+                                                | 413 (>10 MB) | 415 (not PDF/JPEG/PNG
+                                                by magic bytes) | 422 (bad base64)
+         DocumentMeta: {id, survey_id, kind, filename, mime_type, size_bytes,
+                        uploaded_by: {id, email, name}?, extracted?: [CadastralUnit],
+                        created_at}; extracted = visura PDF parser output (owners'
+                        names are never extracted), null for other documents.
+  GET    /api/v1/surveys/{id}/documents      -> 200 [DocumentMeta] (oldest first) | 404
+  GET    /api/v1/documents/{doc_id}/content  -> 200 raw bytes (attachment) | 404
+  DELETE /api/v1/documents/{doc_id}          -> 204 | 404
+  Deleting a survey deletes its documents (FK ON DELETE CASCADE).
+  Content is encrypted at rest (AES-256-GCM, app.core.crypto, key
+  DOCUMENTS_ENCRYPTION_KEY); size_bytes is the plaintext size. An
+  undecryptable row answers 500 (logged, no content).
+
 Authorization / IDOR (P1-A1 AC-3)
   Every survey read/update/delete filters on user_id: a survey belonging to
   another user answers 404 (no existence oracle), never 200. Creation always

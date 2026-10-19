@@ -719,6 +719,7 @@ class TestSecretKeyFailFast:
     def test_strong_secret_allowed_in_production(self, monkeypatch):
         monkeypatch.setenv("APP_ENV", "production")
         monkeypatch.setenv("SECRET_KEY", "not-a-placeholder-" + uuid.uuid4().hex * 2)
+        monkeypatch.setenv("DOCUMENTS_ENCRYPTION_KEY", base64.urlsafe_b64encode(b"k" * 32).decode())
         assert Settings().APP_ENV == "production"
 
 
