@@ -75,6 +75,35 @@ docker compose up -d --build
 - **Backup** (da fare!): `docker compose exec db pg_dump -U preape pre_ape > backup.sql`
   e copia il file fuori dal server.
 
+## Privacy, termini d'uso e accordo sul trattamento dei dati
+
+L'app mostra tre documenti (menu account → "Privacy e termini", e nella
+registrazione): informativa privacy, termini d'uso e accordo sul trattamento
+dei dati (DPA, art. 28 GDPR). I testi sono in `backend/app/legal/*.md`; i tuoi
+dati si inseriscono come variabili d'ambiente (nel `.env` per il server di
+casa, in "Environment" su Render):
+
+| Variabile | Cosa scrivere |
+|---|---|
+| `LEGAL_TITOLARE_NOME` | nome e cognome o ragione sociale di chi gestisce il servizio |
+| `LEGAL_TITOLARE_INDIRIZZO` | sede / indirizzo |
+| `LEGAL_TITOLARE_PIVA_CF` | partita IVA e/o codice fiscale |
+| `LEGAL_TITOLARE_EMAIL_PRIVACY` | email per le richieste privacy (controllala!) |
+| `LEGAL_SERVER_UBICAZIONE` | dove sono i server, es. `Italia` (o il Paese UE del VPS) |
+| `LEGAL_FORO_COMPETENTE` | città del tribunale competente, es. `Milano` |
+| `LEGAL_DATA_EFFICACIA` | data da cui valgono i documenti, es. `19/10/2026` |
+
+Poi `docker compose up -d` (ricrea il container con le nuove variabili). Finché
+ne manca anche una sola, nei testi compare `[da completare: …]` e l'app mostra
+il banner **"Bozza da far verificare a un legale"**.
+
+- **Fai rileggere i testi a un legale prima di aprire il servizio al pubblico.**
+- Se cambi i testi in modo sostanziale, aggiorna `LEGAL_VERSION` in
+  `backend/app/legal/__init__.py`: al login successivo ogni utente dovrà
+  accettare di nuovo (chi rifiuta viene disconnesso).
+- Se cambi hosting (es. un VPS) o aggiungi fornitori, aggiorna l'elenco dei
+  sub-responsabili nei documenti e avvisa gli utenti (il DPA prevede 15 giorni).
+
 ## Quando arrivano clienti paganti
 
 | Voce | Servizio | Costo indicativo |

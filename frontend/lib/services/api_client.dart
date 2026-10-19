@@ -19,6 +19,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../models/energy.dart';
+import '../models/legal.dart';
 import '../models/survey.dart';
 
 /// Base class di ogni errore di API: `statusCode` 0 = nessuna risposta
@@ -109,17 +110,34 @@ class ApiClient {
   // Auth
   // ---------------------------------------------------------------------------
 
-  /// `POST /api/v1/auth/register` → 201 (409 se l'email è già registrata).
+  /// `POST /api/v1/auth/register` → 201 (409 se l'email è già registrata,
+  /// 422 se [acceptTerms] non è `true`: Termini d'uso + DPA obbligatori).
   Future<AuthToken> register({
     required String email,
     required String password,
     String? name,
+    required bool acceptTerms,
   }) {
     return _authRequest('$_apiPrefix/auth/register', <String, Object?>{
       'email': email,
       'password': password,
       if (name != null) 'name': name,
+      'accept_terms': acceptTerms,
     });
+  }
+
+  /// `POST /api/v1/auth/accept-terms` → accetta la versione corrente dei
+  /// Termini d'uso + DPA (utenti registrati prima di un aggiornamento).
+  Future<void> acceptTerms() async {
+    await _request('POST', '$_apiPrefix/auth/accept-terms',
+        body: const <String, Object?>{});
+  }
+
+  /// `GET /api/v1/legal/{doc}` (doc: privacy | termini | dpa), senza auth.
+  Future<LegalDocument> getLegalDocument(String doc) async {
+    final json = await _request('GET', '$_apiPrefix/legal/$doc',
+        authenticated: false);
+    return LegalDocument.fromJson(json);
   }
 
   /// `POST /api/v1/auth/login` → 200 (401 se credenziali errate).

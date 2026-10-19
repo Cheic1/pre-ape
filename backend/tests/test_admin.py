@@ -102,7 +102,7 @@ def test_admin_forbidden_for_non_admin(client, auth_a, monkeypatch, method, path
 def test_login_reports_is_admin(client, monkeypatch):
     email = f"loginadm_{uuid.uuid4().hex}@example.test"
     response = client.post(
-        "/api/v1/auth/register", json={"email": email, "password": TEST_PASSWORD}
+        "/api/v1/auth/register", json={"email": email, "password": TEST_PASSWORD, "accept_terms": True}
     )
     assert response.status_code == 201
     assert response.json()["is_admin"] is False

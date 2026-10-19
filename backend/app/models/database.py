@@ -34,6 +34,9 @@ class User(Base):
     google_id = Column(String(255), unique=True, index=True)
     # JWT login (nullable: pre-existing rows have no password until they re-register)
     password_hash = Column(String(255))
+    # Termini d'uso / DPA accettati (app.legal.LEGAL_VERSION) e quando
+    terms_version = Column(String(32))
+    terms_accepted_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime)
     

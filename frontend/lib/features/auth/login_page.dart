@@ -4,6 +4,8 @@ import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/features/auth/auth_provider.dart';
+import 'package:pre_ape/features/legal/terms_gate.dart';
+import 'package:pre_ape/models/legal.dart';
 
 /// Accesso / registrazione del tecnico.
 class LoginPage extends ConsumerStatefulWidget {
@@ -20,6 +22,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _name = TextEditingController();
   bool _registerMode = false;
   bool _obscure = true;
+  bool _acceptTerms = false;
 
   @override
   void dispose() {
@@ -33,7 +36,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (!_formKey.currentState!.validate()) return;
     final auth = ref.read(authProvider);
     if (_registerMode) {
-      await auth.register(_email.text, _password.text, name: _name.text);
+      if (!_acceptTerms) return;
+      await auth.register(_email.text, _password.text,
+          name: _name.text, acceptTerms: true);
     } else {
       await auth.login(_email.text, _password.text);
     }
@@ -136,6 +141,27 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           return null;
                         },
                       ),
+                      if (_registerMode) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Checkbox(
+                              key: const ValueKey('register_accept_terms'),
+                              value: _acceptTerms,
+                              activeColor: AppColors.primary,
+                              onChanged: (v) =>
+                                  setState(() => _acceptTerms = v ?? false),
+                            ),
+                            const Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.only(top: 12),
+                                child: LegalConsentText(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       if (auth.error != null) ...[
                         const SizedBox(height: AppSpacing.md),
                         Container(
@@ -164,7 +190,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               borderRadius: BorderRadius.circular(AppRadius.md),
                             ),
                           ),
-                          onPressed: auth.busy ? null : _submit,
+                          onPressed: auth.busy || (_registerMode && !_acceptTerms)
+                              ? null
+                              : _submit,
                           child: auth.busy
                               ? const SizedBox(
                                   width: 22,
@@ -190,6 +218,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               : 'Non hai un account? Registrati gratis',
                           style: const TextStyle(color: AppColors.primaryGlow),
                         ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      const Center(
+                        child: LegalLink(LegalDoc.privacy,
+                            label: 'Privacy e termini'),
                       ),
                     ],
                   ),

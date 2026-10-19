@@ -73,6 +73,7 @@ void main() {
         email: 'anna@example.com',
         password: 'password123',
         name: 'Anna',
+        acceptTerms: true,
       );
 
       expect(captured.method, 'POST');
@@ -84,6 +85,7 @@ void main() {
         'email': 'anna@example.com',
         'password': 'password123',
         'name': 'Anna',
+        'accept_terms': true,
       });
 
       expect(auth.accessToken, 'jwt-test-token');
@@ -271,7 +273,8 @@ void main() {
     test('409 (email duplicata) → ApiException generica con lo status', () async {
       await expectLater(
         clientReturning(409, {'detail': 'Email already registered'})
-            .register(email: 'a@b.it', password: 'password123'),
+            .register(
+                email: 'a@b.it', password: 'password123', acceptTerms: true),
         throwsA(isA<ApiException>()
             .having((e) => e.statusCode, 'statusCode', 409)
             .having((e) => e.message, 'message', 'Email already registered')),

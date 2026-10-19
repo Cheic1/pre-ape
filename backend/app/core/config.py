@@ -106,6 +106,15 @@ class Settings(BaseSettings):
         return HKDF(
             algorithm=hashes.SHA256(), length=32, salt=None, info=b"pre-ape-documents"
         ).derive(self.SECRET_KEY.encode())
+    # Documenti legali (app/legal/*.md): valori dei segnaposto {{...}}.
+    # Vuoti = restano "[da completare: ...]" e l'app mostra il banner bozza.
+    LEGAL_TITOLARE_NOME: str = Field(default="", description="ragione sociale / nome del titolare")
+    LEGAL_TITOLARE_INDIRIZZO: str = Field(default="", description="sede legale / indirizzo")
+    LEGAL_TITOLARE_PIVA_CF: str = Field(default="", description="P.IVA e/o codice fiscale")
+    LEGAL_TITOLARE_EMAIL_PRIVACY: str = Field(default="", description="email per richieste privacy")
+    LEGAL_SERVER_UBICAZIONE: str = Field(default="", description="dove sono i server (es. 'Italia')")
+    LEGAL_FORO_COMPETENTE: str = Field(default="", description="foro competente (es. 'Milano')")
+    LEGAL_DATA_EFFICACIA: str = Field(default="", description="data di efficacia dei documenti")
 
     # Rate limiting (auth endpoints, per client IP)
     AUTH_RATE_LIMIT_PER_MINUTE: int = 10

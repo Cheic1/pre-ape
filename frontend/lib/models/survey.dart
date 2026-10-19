@@ -338,6 +338,7 @@ class AuthToken {
     required this.email,
     required this.name,
     this.isAdmin = false,
+    this.termsAccepted = false,
   });
 
   factory AuthToken.fromJson(Map<String, dynamic> json) => AuthToken(
@@ -347,6 +348,7 @@ class AuthToken {
         email: json['email'] as String? ?? '',
         name: json['name'] as String? ?? '',
         isAdmin: json['is_admin'] as bool? ?? false,
+        termsAccepted: json['terms_accepted'] as bool? ?? false,
       );
 
   final String accessToken;
@@ -357,4 +359,6 @@ class AuthToken {
 
   /// Email in `ADMIN_EMAILS` lato server (pannello amministrazione).
   final bool isAdmin;
+  /// L'utente ha accettato la versione corrente di Termini d'uso + DPA.
+  final bool termsAccepted;
 }
