@@ -65,6 +65,9 @@ class SurveyData {
   /// capped at [kMaxAdditionalPhotos].
   List<String> additionalPhotos = [];
 
+  /// Dati catastali (unità immobiliari), max [kMaxCadastralUnits].
+  List<CadastralUnit> cadastral = [];
+
   /// Score 0–100 for the gauge (server `punteggio`), null before the first
   /// estimate.
   double? get score => result?.punteggio;
@@ -86,6 +89,7 @@ class SurveyData {
     bool? estimating,
     Map<String, String>? photos,
     List<String>? additionalPhotos,
+    List<CadastralUnit>? cadastral,
   }) {
     return SurveyData()
       ..surveyId = surveyId ?? this.surveyId
@@ -96,6 +100,7 @@ class SurveyData {
       ..address = address ?? this.address
       ..photos = photos ?? this.photos
       ..additionalPhotos = additionalPhotos ?? this.additionalPhotos
+      ..cadastral = cadastral ?? this.cadastral
       ..squareMeters = squareMeters ?? this.squareMeters
       ..avgHeight = avgHeight ?? this.avgHeight
       ..latitude = latitude ?? this.latitude
@@ -210,7 +215,8 @@ class SurveyNotifier extends ChangeNotifier {
       ..building = _buildingFrom(s)
       ..result = s.energyResult
       ..photos = Map<String, String>.of(s.photos ?? const {})
-      ..additionalPhotos = List<String>.of(s.additionalPhotos ?? const []);
+      ..additionalPhotos = List<String>.of(s.additionalPhotos ?? const [])
+      ..cadastral = List<CadastralUnit>.of(s.cadastral ?? const []);
     _data = data;
     _currentStep = 1;
     // An existing survey already has its position: never overwrite it via GPS.
@@ -249,6 +255,11 @@ class SurveyNotifier extends ChangeNotifier {
       building: Map<String, Object?>.of(_data.building),
       photos: _data.photos,
       additionalPhotos: _data.additionalPhotos,
+      // Le unità lasciate vuote non vanno sul server.
+      cadastral: [
+        for (final u in _data.cadastral)
+          if (!u.isEmpty) u,
+      ],
     );
   }
 
@@ -455,6 +466,65 @@ class SurveyNotifier extends ChangeNotifier {
     if (!_data.photos.containsKey(slot)) return;
     final updated = {..._data.photos}..remove(slot);
     _data = _data.copyWith(photos: updated);
+    _touch();
+    notifyListeners();
+  }
+
+  // ── Dati catastali ───────────────────────────────────────────────────
+
+  /// Add an empty cadastral unit. False when [kMaxCadastralUnits] is reached.
+  bool addCadastralUnit([CadastralUnit unit = const CadastralUnit()]) {
+    if (_data.cadastral.length >= kMaxCadastralUnits) return false;
+    _data = _data.copyWith(cadastral: [..._data.cadastral, unit]);
+    _touch();
+    notifyListeners();
+    return true;
+  }
+
+  /// Replace the unit at [index]. False when the index is out of range.
+  bool updateCadastralUnit(int index, CadastralUnit unit) {
+    if (index < 0 || index >= _data.cadastral.length) return false;
+    final updated = [..._data.cadastral]..[index] = unit;
+    _data = _data.copyWith(cadastral: updated);
+    _touch();
+    notifyListeners();
+    return true;
+  }
+
+  /// Set one field of the unit at [index] (null/empty clears it).
+  void setCadastralField(int index, String key, Object? value) {
+    if (index < 0 || index >= _data.cadastral.length) return;
+    updateCadastralUnit(index, _data.cadastral[index].withField(key, value));
+  }
+
+  /// Remove the unit at [index]. False when the index is out of range.
+  bool removeCadastralUnit(int index) {
+    if (index < 0 || index >= _data.cadastral.length) return false;
+    final updated = [..._data.cadastral]..removeAt(index);
+    _data = _data.copyWith(cadastral: updated);
+    _touch();
+    notifyListeners();
+    return true;
+  }
+
+  /// Apply the units proposed by a visura: empty units are dropped, a unit
+  /// with the same foglio/particella/sub is completed with the visura values
+  /// (which win where present), the others are appended (up to the cap).
+  void applyCadastralProposal(List<CadastralUnit> proposed) {
+    final units = [
+      for (final u in _data.cadastral)
+        if (!u.isEmpty) u,
+    ];
+    for (final p in proposed) {
+      if (p.isEmpty) continue;
+      final i = units.indexWhere((u) => u.sameParcelAs(p));
+      if (i >= 0) {
+        units[i] = units[i].mergedWith(p);
+      } else if (units.length < kMaxCadastralUnits) {
+        units.add(p);
+      }
+    }
+    _data = _data.copyWith(cadastral: units);
     _touch();
     notifyListeners();
   }

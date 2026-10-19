@@ -15,12 +15,28 @@ import 'package:web/web.dart' as web;
 Future<List<({String dataUrl, String name})>?> pickImageFiles({
   bool camera = false,
   bool multiple = false,
+}) =>
+    _pickFiles(accept: 'image/*', camera: camera, multiple: multiple);
+
+/// Open the file dialog for a single document (PDF/JPEG/PNG by default) and
+/// return it as a base64 data-URL, or null if the user cancels.
+Future<({String dataUrl, String name})?> pickDocumentFile({
+  String accept = 'application/pdf,image/jpeg,image/png',
+}) async {
+  final files = await _pickFiles(accept: accept);
+  return files == null || files.isEmpty ? null : files.first;
+}
+
+Future<List<({String dataUrl, String name})>?> _pickFiles({
+  required String accept,
+  bool camera = false,
+  bool multiple = false,
 }) async {
   final completer = Completer<List<({String dataUrl, String name})>?>();
 
   final input = web.document.createElement('input') as web.HTMLInputElement;
   input.type = 'file';
-  input.accept = 'image/*';
+  input.accept = accept;
   input.multiple = multiple;
   if (camera) {
     input.setAttribute('capture', 'environment');

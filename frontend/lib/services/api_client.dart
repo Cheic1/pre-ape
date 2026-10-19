@@ -14,6 +14,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -208,6 +209,61 @@ class ApiClient {
   }
 
   // ---------------------------------------------------------------------------
+  // Documenti catastali + scheda CENED
+  // ---------------------------------------------------------------------------
+
+  /// `POST /api/v1/surveys/{id}/documents` → 201. [kind]: `visura` |
+  /// `planimetria` | `mappa` | `altro`; [contentBase64] = file in base64
+  /// (senza prefisso data-URL). 413 oltre 10 MB, 415 formato non PDF/JPEG/PNG,
+  /// 409 oltre 10 documenti.
+  Future<DocumentMeta> uploadDocument(
+    String surveyId, {
+    required String kind,
+    required String filename,
+    required String contentBase64,
+  }) async {
+    final json = await _request(
+      'POST',
+      '$_apiPrefix/surveys/$surveyId/documents',
+      body: <String, Object?>{
+        'kind': kind,
+        'filename': filename,
+        'content_base64': contentBase64,
+      },
+    );
+    return DocumentMeta.fromJson(json);
+  }
+
+  /// `GET /api/v1/surveys/{id}/documents` → documenti (dal più vecchio).
+  Future<List<DocumentMeta>> listDocuments(String surveyId) async {
+    final json =
+        await _requestAny('GET', '$_apiPrefix/surveys/$surveyId/documents');
+    if (json is! List) {
+      throw ApiException(200, 'Risposta inattesa dal server (GET /documents)');
+    }
+    return json
+        .whereType<Map<String, dynamic>>()
+        .map(DocumentMeta.fromJson)
+        .toList(growable: false);
+  }
+
+  /// `GET /api/v1/documents/{id}/content` → byte grezzi del file.
+  Future<Uint8List> downloadDocument(String documentId) =>
+      _requestBytes('$_apiPrefix/documents/$documentId/content');
+
+  /// `DELETE /api/v1/documents/{id}` → 204 | 404.
+  Future<void> deleteDocument(String documentId) async {
+    await _requestAny('DELETE', '$_apiPrefix/documents/$documentId');
+  }
+
+  /// `GET /api/v1/surveys/{id}/cened-sheet` → scheda CENED (dati salvati).
+  Future<CenedSheet> getCenedSheet(String surveyId) async {
+    final json =
+        await _request('GET', '$_apiPrefix/surveys/$surveyId/cened-sheet');
+    return CenedSheet.fromJson(json);
+  }
+
+  // ---------------------------------------------------------------------------
   // Transport
   // ---------------------------------------------------------------------------
 
@@ -283,6 +339,36 @@ class ApiClient {
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return payload;
+    }
+    throw _exceptionFor(response.statusCode, payload);
+  }
+
+  /// GET autenticato che restituisce il corpo binario (download file);
+  /// stessi timeout/mappatura errori di [_requestAny].
+  Future<Uint8List> _requestBytes(String path) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final headers = <String, String>{
+      'Accept': '*/*',
+      if (_token != null) 'Authorization': 'Bearer $_token',
+    };
+    final http.Response response;
+    try {
+      response = await _client.get(uri, headers: headers).timeout(timeout);
+    } on TimeoutException {
+      throw ApiTimeoutException(
+        'Nessuna risposta da $baseUrl$path entro ${_formatTimeout(timeout)}',
+      );
+    } on http.ClientException catch (e) {
+      throw ApiException(0, 'Errore di rete: ${e.message}');
+    }
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return response.bodyBytes;
+    }
+    Object? payload;
+    try {
+      payload = response.body.isEmpty ? null : jsonDecode(response.body);
+    } on FormatException {
+      payload = null;
     }
     throw _exceptionFor(response.statusCode, payload);
   }
