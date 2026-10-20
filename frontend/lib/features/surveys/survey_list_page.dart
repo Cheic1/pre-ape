@@ -168,7 +168,7 @@ class _SurveyListPageState extends ConsumerState<SurveyListPage> {
                   child: Row(children: [
                     Icon(Icons.admin_panel_settings_outlined, size: 18),
                     SizedBox(width: 8),
-                    Text('Amministrazione'),
+                    Flexible(child: Text('Amministrazione')),
                   ]),
                 ),
               const PopupMenuItem<String>(
@@ -176,7 +176,7 @@ class _SurveyListPageState extends ConsumerState<SurveyListPage> {
                 child: Row(children: [
                   Icon(Icons.policy_outlined, size: 18),
                   SizedBox(width: 8),
-                  Text('Privacy e termini'),
+                  Flexible(child: Text('Privacy e termini')),
                 ]),
               ),
               const PopupMenuItem<String>(
@@ -184,7 +184,7 @@ class _SurveyListPageState extends ConsumerState<SurveyListPage> {
                 child: Row(children: [
                   Icon(Icons.logout, size: 18),
                   SizedBox(width: 8),
-                  Text('Esci'),
+                  Flexible(child: Text('Esci')),
                 ]),
               ),
             ],

@@ -15,7 +15,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.api.v1 import get_current_user, get_db
 from app.core.catasto import CadastralUnit
@@ -207,6 +207,7 @@ async def list_documents(
     survey = _owned_survey(db, survey_id, current_user)
     rows = (
         db.query(SurveyDocument, User)
+        .options(defer(SurveyDocument.content))
         .outerjoin(User, User.id == SurveyDocument.uploaded_by)
         .filter(SurveyDocument.survey_id == survey.id)
         .order_by(SurveyDocument.created_at.asc(), SurveyDocument.id.asc())

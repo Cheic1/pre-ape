@@ -13,7 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.api.v1 import (
     SurveyResponse,
@@ -281,6 +281,7 @@ async def list_documents(
     survey = _get_survey(db, survey_id)
     rows = (
         db.query(SurveyDocument, User)
+        .options(defer(SurveyDocument.content))
         .outerjoin(User, User.id == SurveyDocument.uploaded_by)
         .filter(SurveyDocument.survey_id == survey.id)
         .order_by(SurveyDocument.created_at, SurveyDocument.id)
