@@ -49,6 +49,10 @@ Endpoints (path ids are UUIDs -> 422 when malformed, per-field validation)
   GET    /api/v1/surveys/{id}/photo-analyses -> 200 [PhotoAnalysis] | 404
   POST   /api/v1/photo-analyses              -> 201 | 404 (target survey must be owned)
   GET    /api/v1/surveys/{id}/cened-sheet    -> 200 CenedSheet | 404 (app.api.v1.cened)
+  GET    /api/v1/surveys/{id}/cened-xml?format=2.0|1.2
+                                             -> 200 application/xml (attachment
+                                                preape_<id8>_cened20.xml / _cened12.xml)
+                                                | 404 | 422 other formats
 
 Scheda CENED (app.core.cened.sheet): survey data ordered like the CENED+2.0
 screens, for copying into the software (no importable XML).
@@ -58,6 +62,14 @@ screens, for copying into the software (no importable XML).
   section keys in order: edificio, subalterni, strutture_opache, serramenti,
   impianti, documenti. "stimato" = engine default (energy_result.assunzioni) or
   derived suggestion; "da_rilevare" = missing (value null).
+
+XML CENED (app.core.cened.xml_export): the survey as a file to *try* in
+CENED+2.0 "File -> Importa file XML". format=2.0 -> calcolo.xml with datiInput
+only (valid against calcolo.xsd; no valoriIntermedi/datiOutput/hash/licenza,
+which only the CENED engine produces, so CENED's verificaValidita rejects it);
+format=1.2 -> legacy CENED+ 1.2 "dati" file (DTD 1.0.5) that CENED converts with
+its own engine. A leading XML comment says "stima preliminare" and lists the
+default values used and the data left to enter in CENED.
 
 Authorization / IDOR (P1-A1 AC-3)
   Every survey read/update/delete filters on user_id: a survey belonging to
