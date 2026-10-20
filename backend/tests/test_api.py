@@ -71,7 +71,7 @@ class TestAuth:
         email = f"reg_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}"
         response = client.post(
             "/api/v1/auth/register",
-            json={"email": email, "password": TEST_PASSWORD, "name": "Reg User"},
+            json={"email": email, "password": TEST_PASSWORD, "accept_terms": True, "name": "Reg User"},
         )
         assert response.status_code == 201, response.text
         data = response.json()
@@ -85,7 +85,7 @@ class TestAuth:
         email = f"norm_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}"
         response = client.post(
             "/api/v1/auth/register",
-            json={"email": f"  {email.upper()}  ", "password": TEST_PASSWORD},
+            json={"email": f"  {email.upper()}  ", "password": TEST_PASSWORD, "accept_terms": True},
         )
         assert response.status_code == 201, response.text
         assert response.json()["email"] == email
@@ -94,7 +94,7 @@ class TestAuth:
 
     def test_register_duplicate_email_conflict(self, client):
         email = f"dup_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}"
-        payload = {"email": email, "password": TEST_PASSWORD}
+        payload = {"email": email, "password": TEST_PASSWORD, "accept_terms": True}
         first = client.post("/api/v1/auth/register", json=payload)
         assert first.status_code == 201
         second = client.post("/api/v1/auth/register", json=payload)
@@ -104,7 +104,7 @@ class TestAuth:
     def test_register_short_password_rejected(self, client):
         response = client.post(
             "/api/v1/auth/register",
-            json={"email": f"weak_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}", "password": "short"},
+            json={"email": f"weak_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}", "password": "short", "accept_terms": True},
         )
         assert response.status_code == 422
 
@@ -112,7 +112,7 @@ class TestAuth:
         email = f"login_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}"
         register = client.post(
             "/api/v1/auth/register",
-            json={"email": email, "password": TEST_PASSWORD, "name": "Login User"},
+            json={"email": email, "password": TEST_PASSWORD, "accept_terms": True, "name": "Login User"},
         )
         assert register.status_code == 201
         login = client.post(
@@ -129,7 +129,7 @@ class TestAuth:
         email = f"wrongpw_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}"
         assert client.post(
             "/api/v1/auth/register",
-            json={"email": email, "password": TEST_PASSWORD},
+            json={"email": email, "password": TEST_PASSWORD, "accept_terms": True},
         ).status_code == 201
         response = client.post(
             "/api/v1/auth/login",
@@ -144,7 +144,7 @@ class TestAuth:
         known = f"known_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}"
         assert client.post(
             "/api/v1/auth/register",
-            json={"email": known, "password": TEST_PASSWORD},
+            json={"email": known, "password": TEST_PASSWORD, "accept_terms": True},
         ).status_code == 201
         wrong_pw = client.post(
             "/api/v1/auth/login", json={"email": known, "password": "Definitely-Wrong-1"}
@@ -187,7 +187,7 @@ class TestAuth:
         # the limiter also blocks register on the same IP window
         blocked = client.post(
             "/api/v1/auth/register",
-            json={"email": f"blocked_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}", "password": TEST_PASSWORD},
+            json={"email": f"blocked_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}", "password": TEST_PASSWORD, "accept_terms": True},
         )
         assert blocked.status_code == 429
 
@@ -719,6 +719,7 @@ class TestSecretKeyFailFast:
     def test_strong_secret_allowed_in_production(self, monkeypatch):
         monkeypatch.setenv("APP_ENV", "production")
         monkeypatch.setenv("SECRET_KEY", "not-a-placeholder-" + uuid.uuid4().hex * 2)
+        monkeypatch.setenv("DOCUMENTS_ENCRYPTION_KEY", base64.urlsafe_b64encode(b"k" * 32).decode())
         assert Settings().APP_ENV == "production"
 
 
@@ -845,7 +846,7 @@ class TestValidationContracts:
         for bad in ("not-an-email", "missing-at.example", "trailing@", "@leading.test"):
             response = client.post(
                 "/api/v1/auth/register",
-                json={"email": bad, "password": TEST_PASSWORD},
+                json={"email": bad, "password": TEST_PASSWORD, "accept_terms": True},
             )
             assert response.status_code == 422, bad
             assert response.json()["detail"] == "Invalid email format"
@@ -854,7 +855,7 @@ class TestValidationContracts:
         known = f"uniform_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}"
         assert client.post(
             "/api/v1/auth/register",
-            json={"email": known, "password": TEST_PASSWORD},
+            json={"email": known, "password": TEST_PASSWORD, "accept_terms": True},
         ).status_code == 201
         wrong_pw = client.post(
             "/api/v1/auth/login",
@@ -886,7 +887,7 @@ class TestRateLimitWindowReset:
         # hit 1: register
         assert client.post(
             "/api/v1/auth/register",
-            json={"email": email, "password": TEST_PASSWORD},
+            json={"email": email, "password": TEST_PASSWORD, "accept_terms": True},
         ).status_code == 201
         # hits 2-10: wrong logins -> 401
         for _ in range(9):

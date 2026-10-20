@@ -4,6 +4,7 @@ import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/theme/app_theme.dart';
 import 'package:pre_ape/features/auth/auth_provider.dart';
 import 'package:pre_ape/features/auth/login_page.dart';
+import 'package:pre_ape/features/legal/terms_gate.dart';
 import 'package:pre_ape/features/surveys/survey_list_page.dart';
 
 void main() {
@@ -52,7 +53,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       case AuthStatus.signedOut:
         return const LoginPage();
       case AuthStatus.signedIn:
-        return const SurveyListPage();
+        return const TermsGate(child: SurveyListPage());
     }
   }
 }

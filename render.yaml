@@ -16,3 +16,7 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
+      # base64 of 256 random bits (accepted by the app). Copy it from the
+      # dashboard and back it up: losing it makes the documents unrecoverable.
+      - key: DOCUMENTS_ENCRYPTION_KEY
+        generateValue: true

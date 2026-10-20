@@ -28,7 +28,10 @@
 /// campo – l'update resta parziale e sicuro.
 library;
 
+import 'catasto.dart';
 import 'energy.dart';
+
+export 'catasto.dart';
 
 /// Corpo di `POST /api/v1/surveys` e `PUT /api/v1/surveys/{id}`
 /// (gli schema contrattuali `SurveyCreate` e `SurveyUpdate` sono identici).
@@ -54,6 +57,7 @@ class SurveyCreate {
     this.generatorYear,
     this.building,
     this.additionalPhotos,
+    this.cadastral,
   });
 
   factory SurveyCreate.fromJson(Map<String, dynamic> json) => SurveyCreate(
@@ -78,6 +82,7 @@ class SurveyCreate {
         building: (json['building'] as Map<String, dynamic>?),
         additionalPhotos:
             (json['additional_photos'] as List<dynamic>?)?.cast<String>(),
+        cadastral: _cadastralFrom(json['cadastral']),
       );
 
   /// Intestazione della pratica (es. "Pratica 12/2026") e nome del cliente.
@@ -114,6 +119,9 @@ class SurveyCreate {
   /// Foto aggiuntive (data-URL), max 6 lato server.
   final List<String>? additionalPhotos;
 
+  /// Dati catastali (max [kMaxCadastralUnits] unità).
+  final List<CadastralUnit>? cadastral;
+
   /// Serializzazione a `snake_case`; omette i `null` (update parziale).
   Map<String, Object?> toJson() => <String, Object?>{
         if (title != null) 'title': title,
@@ -140,6 +148,8 @@ class SurveyCreate {
               if (e.value != null) e.key: e.value,
           },
         if (additionalPhotos != null) 'additional_photos': additionalPhotos,
+        if (cadastral != null)
+          'cadastral': [for (final u in cadastral!) u.toJson()],
       };
 }
 
@@ -174,6 +184,7 @@ class SurveyRead {
     this.building,
     this.energyResult,
     this.additionalPhotos,
+    this.cadastral,
   });
 
   factory SurveyRead.fromJson(Map<String, dynamic> json) => SurveyRead(
@@ -207,6 +218,7 @@ class SurveyRead {
             : null,
         additionalPhotos:
             (json['additional_photos'] as List<dynamic>?)?.cast<String>(),
+        cadastral: _cadastralFrom(json['cadastral']),
       );
 
   /// UUID del survey (richiesto dal contratto).
@@ -254,7 +266,17 @@ class SurveyRead {
 
   /// Foto aggiuntive (data-URL).
   final List<String>? additionalPhotos;
+
+  /// Dati catastali.
+  final List<CadastralUnit>? cadastral;
 }
+
+List<CadastralUnit>? _cadastralFrom(Object? json) => json is List
+    ? json
+        .whereType<Map<String, dynamic>>()
+        .map(CadastralUnit.fromJson)
+        .toList(growable: false)
+    : null;
 
 /// Riga di `GET /api/v1/surveys` (nessun payload foto, solo il conteggio).
 class SurveySummary {
@@ -315,6 +337,8 @@ class AuthToken {
     required this.userId,
     required this.email,
     required this.name,
+    this.isAdmin = false,
+    this.termsAccepted = false,
   });
 
   factory AuthToken.fromJson(Map<String, dynamic> json) => AuthToken(
@@ -323,6 +347,8 @@ class AuthToken {
         userId: json['user_id'] as String,
         email: json['email'] as String? ?? '',
         name: json['name'] as String? ?? '',
+        isAdmin: json['is_admin'] as bool? ?? false,
+        termsAccepted: json['terms_accepted'] as bool? ?? false,
       );
 
   final String accessToken;
@@ -330,4 +356,9 @@ class AuthToken {
   final String userId;
   final String email;
   final String name;
+
+  /// Email in `ADMIN_EMAILS` lato server (pannello amministrazione).
+  final bool isAdmin;
+  /// L'utente ha accettato la versione corrente di Termini d'uso + DPA.
+  final bool termsAccepted;
 }

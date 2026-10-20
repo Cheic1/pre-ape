@@ -6,3 +6,8 @@ Future<List<({String dataUrl, String name})>?> pickImageFiles({
   bool multiple = false,
 }) async =>
     null;
+
+Future<({String dataUrl, String name})?> pickDocumentFile({
+  String accept = 'application/pdf,image/jpeg,image/png',
+}) async =>
+    null;

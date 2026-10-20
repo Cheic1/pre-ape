@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
+import 'package:pre_ape/features/onboarding/catasto_section.dart';
 import 'package:pre_ape/features/onboarding/energy_options.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
 import 'package:pre_ape/features/onboarding/wizard_widgets.dart';
@@ -98,6 +99,8 @@ class _Step1GeneralDataState extends ConsumerState<Step1GeneralData> {
         const SizedBox(height: AppSpacing.lg),
 
         const ClimateSection(),
+
+        const CatastoSection(),
 
         const WizardNav(showBack: false),
       ],

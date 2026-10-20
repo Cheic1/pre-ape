@@ -8,6 +8,7 @@ import 'package:pre_ape/features/onboarding/energy_options.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
 import 'package:pre_ape/features/onboarding/web_media.dart';
 import 'package:pre_ape/models/energy.dart';
+import 'package:pre_ape/models/survey.dart';
 
 String _esc(Object? value) {
   final s = value?.toString();
@@ -44,7 +45,8 @@ const _classColors = {
 String _row(String label, Object? value, {bool assumed = false}) =>
     '<tr><td>${_esc(label)}</td><td>${_esc(value)}${assumed ? ' <span class="est">stimato</span>' : ''}</td></tr>';
 
-String buildReportHtml(SurveyData s) {
+/// [cened]: scheda CENED dei dati salvati (opzionale, sezione omessa se null).
+String buildReportHtml(SurveyData s, {CenedSheet? cened}) {
   final now = DateTime.now();
   final date =
       '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
@@ -126,6 +128,11 @@ String buildReportHtml(SurveyData s) {
   figure img { width: 160px; height: 120px; object-fit: cover;
                border-radius: 8px; border: 1px solid #e2e5ea; }
   figcaption { font-size: 12px; color: #667085; text-align: center; }
+  h3 { font-size: 14px; margin: 18px 0 6px; color: #475467; }
+  .missing td { background: #fffaeb; }
+  .missing td:last-child { color: #b54708; font-style: italic; }
+  .field { display: block; font-size: 10px; color: #98a2b3;
+           font-family: ui-monospace, monospace; }
   .footer { margin-top: 28px; font-size: 12px; color: #98a2b3;
             border-top: 1px solid #e2e5ea; padding-top: 12px; }
   @media print { body { background: #fff; padding: 0; }
@@ -148,6 +155,8 @@ String buildReportHtml(SurveyData s) {
     ${_row('Comune', r?.comune?.label, assumed: assumed.contains('comune'))}
     ${_row('Zona climatica / gradi giorno', r == null ? null : '${r.zona} / ${r.gradiGiorno} GG')}
   </table>
+
+  ${_cadastral(s.cadastral)}
 
   <h2>Edificio</h2>
   <table class="kv">
@@ -196,6 +205,7 @@ String buildReportHtml(SurveyData s) {
   ${r == null ? '' : _consumption(r)}
   ${r == null ? '' : _improvements(r)}
   ${r == null || r.assunzioni.isEmpty ? '' : _assumptions(r)}
+  ${cened == null ? '' : _cened(cened)}
 
   <h2>Rilievo fotografico</h2>
   ${photoSections.isEmpty ? '<p>Nessuna foto inserita.</p>' : '<div class="photos">\n$photoSections\n</div>'}
@@ -293,6 +303,62 @@ String _improvements(EnergyResult r) {
     ${r.interventi.map((i) => '<tr${i.isGlobal ? ' style="font-weight:700"' : ''}><td>${_esc(i.intervento)}</td><td class="num"><span class="badge" style="background:${_classColors[i.classe] ?? '#667085'}">${_esc(i.classe)}</span></td><td class="num">${_n(i.riduzioneEpPct)}%</td><td class="num">${_eur(i.risparmioAnnuoEur)}</td><td class="num">${_eur(i.investimentoEur)}</td><td class="num">${i.tempoRitornoAnni == null ? '—' : '${_n(i.tempoRitornoAnni)} anni'}</td></tr>').join('\n    ')}
   </table>
   <p class="note">Costi parametrici indicativi (IVA inclusa) al lordo di eventuali detrazioni fiscali; da verificare con preventivi.</p>''';
+}
+
+String _money(num v) => '€ ${v.toStringAsFixed(2).replaceAll('.', ',')}';
+
+String _cadastral(List<CadastralUnit> units) {
+  final filled = units.where((u) => !u.isEmpty).toList(growable: false);
+  if (filled.isEmpty) {
+    return '<h2>Dati catastali</h2>\n  <p>Nessun dato catastale inserito.</p>';
+  }
+  String join(List<String?> parts, String sep) =>
+      parts.whereType<String>().join(sep);
+  final rows = filled.map((u) => '<tr>'
+      '<td>${_esc(u.sezioneUrbana)}</td>'
+      '<td>${_esc(u.foglio)}</td>'
+      '<td>${_esc(u.particella)}</td>'
+      '<td>${_esc(u.subalterno)}</td>'
+      '<td>${_esc(u.categoria)}</td>'
+      '<td>${_esc(u.classe)}</td>'
+      '<td>${_esc(u.consistenza)}</td>'
+      '<td class="num">${u.superficieMq == null ? '—' : '${_n(u.superficieMq)} m²'}</td>'
+      '<td class="num">${u.renditaEuro == null ? '—' : _money(u.renditaEuro!)}</td>'
+      '<td>${_esc(join([u.comune, if (u.codiceComune != null) '(${u.codiceComune})', u.provincia], ' '))}</td>'
+      '<td>${_esc(join([u.indirizzo, if (u.piano != null) 'piano ${u.piano}'], ', '))}</td>'
+      '</tr>');
+  return '''
+  <h2>Dati catastali</h2>
+  <table>
+    <tr><th>Sez.</th><th>Foglio</th><th>Part.</th><th>Sub.</th><th>Cat.</th><th>Cl.</th><th>Consistenza</th><th class="num">Superficie</th><th class="num">Rendita</th><th>Comune</th><th>Indirizzo</th></tr>
+    ${rows.join('\n    ')}
+  </table>''';
+}
+
+String _cened(CenedSheet sheet) {
+  final sections = sheet.sections.map((sec) {
+    final rows = sec.rows.map((row) {
+      final value = row.missing ? 'da rilevare' : row.displayValue;
+      final field = row.cenedField == null
+          ? ''
+          : '<span class="field">${_esc(row.cenedField)}</span>';
+      final est = row.estimated && !row.missing
+          ? ' <span class="est">stimato</span>'
+          : '';
+      return '<tr${row.missing ? ' class="missing"' : ''}>'
+          '<td>${_esc(row.label)}$field</td><td>${_esc(value)}$est</td></tr>';
+    }).join('\n    ');
+    return '''
+  <h3>${_esc(sec.title)}</h3>
+  <table class="kv">
+    ${rows.isEmpty ? '<tr><td colspan="2">Nessun dato.</td></tr>' : rows}
+  </table>''';
+  }).join('\n');
+  return '''
+  <h2>Scheda CENED</h2>
+  <p class="note">${_esc(sheet.disclaimer)}</p>
+  <p class="note">Dati ordinati come le schermate di CENED+2.0, da ricopiare nel software. Righe evidenziate: dato da rilevare.</p>
+$sections''';
 }
 
 String _assumptions(EnergyResult r) => '''

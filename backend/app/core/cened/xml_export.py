@@ -10,7 +10,10 @@ CENED+2.0 (Regione Lombardia) importa da «File → Importa file XML» due forma
   strutturato e validabile contro lo schema.
 * ``build_cened_xml_12`` – file ``dati`` nel vecchio formato CENED+ 1.2 (DTD
   ``cened_Versione-1-0-5.dtd`` pubblicato dalla Regione). CENED+2.0 lo converte
-  col proprio motore (``Trasforma12In20Service``) prima della stessa verifica.
+  e lo firma col proprio motore (``Trasforma12In20Service``) prima della stessa
+  verifica: in una prova locale col motore 1.1.15 il file di un sopralluogo
+  completo è stato convertito e ha superato ``verificaValidita``. Serve almeno il
+  comune (codice ISTAT): senza, la conversione CENED fallisce sui dati climatici.
 
 Entrambe le funzioni sono pure (ricevono il modello ``Survey``) e restituiscono
 ``CenedXml(content: bytes, defaults: list[str])``: ``defaults`` elenca i valori

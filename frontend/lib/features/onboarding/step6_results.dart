@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
+import 'package:pre_ape/features/onboarding/cened_sheet_card.dart';
 import 'package:pre_ape/features/onboarding/report_builder.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
 import 'package:pre_ape/features/onboarding/survey_save.dart';
@@ -11,6 +12,8 @@ import 'package:pre_ape/features/web/web_download_stub.dart'
     if (dart.library.js_interop) 'package:pre_ape/features/web/web_download.dart';
 import 'package:pre_ape/features/widgets/energy_gauge.dart';
 import 'package:pre_ape/models/energy.dart';
+import 'package:pre_ape/models/survey.dart';
+import 'package:pre_ape/services/api_client.dart';
 
 /// Wizard step that holds each input key (for "completa il dato" links).
 int stepForField(String key) {
@@ -73,6 +76,7 @@ class Step6Results extends ConsumerWidget {
             child: Text(result.metodo, style: AppTextStyles.bodySmall),
           ),
         ],
+        const CenedSheetCard(),
         const SizedBox(height: AppSpacing.md),
         OutlinedButton.icon(
           key: const ValueKey('export_report'),
@@ -94,8 +98,18 @@ class Step6Results extends ConsumerWidget {
   }
 
   Future<void> _exportReport(BuildContext context, WidgetRef ref) async {
+    // Scheda CENED dei dati salvati (best effort: il report esce comunque).
+    CenedSheet? cened;
+    if (ref.read(surveyProvider).data.surveyId != null) {
+      try {
+        cened = await loadCenedSheet(context, ref);
+      } on ApiException {
+        cened = null;
+      }
+    }
+    if (!context.mounted) return;
     final survey = ref.read(surveyProvider).data;
-    final html = buildReportHtml(survey);
+    final html = buildReportHtml(survey, cened: cened);
     final now = DateTime.now();
     final stamp =
         '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';

@@ -119,7 +119,7 @@ def register_user(client: TestClient, prefix: str = "user") -> tuple[dict, str]:
     email = f"{prefix}_{uuid.uuid4().hex}@{TEST_EMAIL_DOMAIN}"
     response = client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": TEST_PASSWORD, "name": f"Test {prefix}"},
+        json={"email": email, "password": TEST_PASSWORD, "accept_terms": True, "name": f"Test {prefix}"},
     )
     assert response.status_code == 201, response.text
     body = response.json()

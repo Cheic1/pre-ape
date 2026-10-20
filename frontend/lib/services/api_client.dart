@@ -14,10 +14,12 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
 import '../models/energy.dart';
+import '../models/legal.dart';
 import '../models/survey.dart';
 
 /// Base class di ogni errore di API: `statusCode` 0 = nessuna risposta
@@ -108,17 +110,34 @@ class ApiClient {
   // Auth
   // ---------------------------------------------------------------------------
 
-  /// `POST /api/v1/auth/register` → 201 (409 se l'email è già registrata).
+  /// `POST /api/v1/auth/register` → 201 (409 se l'email è già registrata,
+  /// 422 se [acceptTerms] non è `true`: Termini d'uso + DPA obbligatori).
   Future<AuthToken> register({
     required String email,
     required String password,
     String? name,
+    required bool acceptTerms,
   }) {
     return _authRequest('$_apiPrefix/auth/register', <String, Object?>{
       'email': email,
       'password': password,
       if (name != null) 'name': name,
+      'accept_terms': acceptTerms,
     });
+  }
+
+  /// `POST /api/v1/auth/accept-terms` → accetta la versione corrente dei
+  /// Termini d'uso + DPA (utenti registrati prima di un aggiornamento).
+  Future<void> acceptTerms() async {
+    await _request('POST', '$_apiPrefix/auth/accept-terms',
+        body: const <String, Object?>{});
+  }
+
+  /// `GET /api/v1/legal/{doc}` (doc: privacy | termini | dpa), senza auth.
+  Future<LegalDocument> getLegalDocument(String doc) async {
+    final json = await _request('GET', '$_apiPrefix/legal/$doc',
+        authenticated: false);
+    return LegalDocument.fromJson(json);
   }
 
   /// `POST /api/v1/auth/login` → 200 (401 se credenziali errate).
@@ -208,6 +227,99 @@ class ApiClient {
   }
 
   // ---------------------------------------------------------------------------
+  // Documenti catastali + scheda CENED
+  // ---------------------------------------------------------------------------
+
+  /// `POST /api/v1/surveys/{id}/documents` → 201. [kind]: `visura` |
+  /// `planimetria` | `mappa` | `altro`; [contentBase64] = file in base64
+  /// (senza prefisso data-URL). 413 oltre 10 MB, 415 formato non PDF/JPEG/PNG,
+  /// 409 oltre 10 documenti.
+  Future<DocumentMeta> uploadDocument(
+    String surveyId, {
+    required String kind,
+    required String filename,
+    required String contentBase64,
+  }) async {
+    final json = await _request(
+      'POST',
+      '$_apiPrefix/surveys/$surveyId/documents',
+      body: <String, Object?>{
+        'kind': kind,
+        'filename': filename,
+        'content_base64': contentBase64,
+      },
+    );
+    return DocumentMeta.fromJson(json);
+  }
+
+  /// `GET /api/v1/surveys/{id}/documents` → documenti (dal più vecchio).
+  Future<List<DocumentMeta>> listDocuments(String surveyId) async {
+    final json =
+        await _requestAny('GET', '$_apiPrefix/surveys/$surveyId/documents');
+    if (json is! List) {
+      throw ApiException(200, 'Risposta inattesa dal server (GET /documents)');
+    }
+    return json
+        .whereType<Map<String, dynamic>>()
+        .map(DocumentMeta.fromJson)
+        .toList(growable: false);
+  }
+
+  /// `GET /api/v1/documents/{id}/content` → byte grezzi del file.
+  Future<Uint8List> downloadDocument(String documentId) async =>
+      (await _requestRaw('$_apiPrefix/documents/$documentId/content'))
+          .bodyBytes;
+
+  /// `GET /api/v1/surveys/{id}/cened-xml?format=2.0|1.2` → file XML di prova
+  /// per l'importazione in CENED+2.0. Il nome arriva da `Content-Disposition`
+  /// (fallback `cened_<id>_<format>.xml`).
+  Future<({Uint8List bytes, String filename})> downloadCenedXml(
+      String surveyId, String format) async {
+    final f = Uri.encodeQueryComponent(format);
+    final response = await _requestRaw(
+        '$_apiPrefix/surveys/$surveyId/cened-xml?format=$f');
+    return (
+      bytes: response.bodyBytes,
+      filename: filenameFromContentDisposition(
+              response.headers['content-disposition']) ??
+          'cened_${surveyId}_$format.xml',
+    );
+  }
+
+  /// Nome file da un header `Content-Disposition` (`filename*=UTF-8''…`
+  /// RFC 5987 ha la precedenza su `filename="…"`). Null se assente.
+  static String? filenameFromContentDisposition(String? header) {
+    if (header == null) return null;
+    final ext = RegExp(r"filename\*\s*=\s*([^']*)'[^']*'([^;]+)",
+            caseSensitive: false)
+        .firstMatch(header);
+    if (ext != null) {
+      try {
+        final name = Uri.decodeComponent(ext.group(2)!.trim());
+        if (name.isNotEmpty) return name;
+      } catch (_) {
+        // percent-encoding non valido: prova filename=
+      }
+    }
+    final plain = RegExp(r'filename\s*=\s*"?([^";]+)"?', caseSensitive: false)
+        .firstMatch(header);
+    final name = plain?.group(1)?.trim();
+    return name == null || name.isEmpty ? null : name;
+  }
+
+  /// `DELETE /api/v1/documents/{id}` → 204 | 404.
+  Future<void> deleteDocument(String documentId) async {
+    await _requestAny('DELETE', '$_apiPrefix/documents/$documentId');
+  }
+
+  /// `GET /api/v1/surveys/{id}/cened-sheet` → scheda CENED (dati salvati).
+  Future<CenedSheet> getCenedSheet(String surveyId) async {
+    final json =
+        await _request('GET', '$_apiPrefix/surveys/$surveyId/cened-sheet');
+    return CenedSheet.fromJson(json);
+  }
+
+  // ---------------------------------------------------------------------------
   // Transport
   // ---------------------------------------------------------------------------
 
@@ -283,6 +395,36 @@ class ApiClient {
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return payload;
+    }
+    throw _exceptionFor(response.statusCode, payload);
+  }
+
+  /// GET autenticato che restituisce la risposta grezza (download file);
+  /// stessi timeout/mappatura errori di [_requestAny].
+  Future<http.Response> _requestRaw(String path) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final headers = <String, String>{
+      'Accept': '*/*',
+      if (_token != null) 'Authorization': 'Bearer $_token',
+    };
+    final http.Response response;
+    try {
+      response = await _client.get(uri, headers: headers).timeout(timeout);
+    } on TimeoutException {
+      throw ApiTimeoutException(
+        'Nessuna risposta da $baseUrl$path entro ${_formatTimeout(timeout)}',
+      );
+    } on http.ClientException catch (e) {
+      throw ApiException(0, 'Errore di rete: ${e.message}');
+    }
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return response;
+    }
+    Object? payload;
+    try {
+      payload = response.body.isEmpty ? null : jsonDecode(response.body);
+    } on FormatException {
+      payload = null;
     }
     throw _exceptionFor(response.statusCode, payload);
   }
