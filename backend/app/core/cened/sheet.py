@@ -34,8 +34,8 @@ RowStatus = Literal["ok", "stimato", "da_rilevare"]
 
 DISCLAIMER = (
     "Stima preliminare/indicativa: scheda di supporto per ricopiare i dati del "
-    "sopralluogo in CENED+2.0, nell'ordine delle sue schermate. Non è un APE né un "
-    "file importabile in CENED. Le righe «stimato» sono valori tipici usati dalla "
+    "sopralluogo in CENED+2.0, nell'ordine delle sue schermate. Non è un APE: il "
+    "calcolo e l'attestato restano a carico del certificatore in CENED. Le righe «stimato» sono valori tipici usati dalla "
     "stima e vanno verificati; quelle «da rilevare» mancano."
 )
 
