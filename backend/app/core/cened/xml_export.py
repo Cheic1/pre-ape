@@ -1,15 +1,16 @@
 """File XML del sopralluogo da *provare* a importare in CENED+2.0.
 
-CENED+2.0 (Regione Lombardia) importa da «File → Importa file XML» due formati:
+CENED+2.0 (Regione Lombardia) importa due formati, sempre dentro uno .zip con il
+solo file XML (l'endpoint ``/cened-xml`` lo impacchetta):
 
-* ``build_calcolo_xml_20`` – ``calcolo.xml`` nel formato 2.0 (``calcolo.xsd`` /
-  ``datiCalcolo.xsd``). Contiene solo ``datiInput``: niente ``valoriIntermedi``,
+* ``build_calcolo_xml_20`` – menu «File → Importa file XML»: ``calcolo.xml``
+  nel formato 2.0 (``calcolo.xsd`` / ``datiCalcolo.xsd``). Contiene solo ``datiInput``: niente ``valoriIntermedi``,
   ``datiOutput``, ``hash``, ``hashImport`` né ``licenza`` (sono prodotti dal
   motore CENED e firmati: non li falsifichiamo). Per questo CENED+2.0 lo
   rifiuta in ``CenedImportXML.verificaValidita``; serve comunque come dato
   strutturato e validabile contro lo schema.
-* ``build_cened_xml_12`` – file ``dati`` nel vecchio formato CENED+ 1.2 (DTD
-  ``cened_Versione-1-0-5.dtd`` pubblicato dalla Regione). CENED+2.0 lo converte
+* ``build_cened_xml_12`` – menu «File → Importa file XML 1.2»: file ``dati``
+  nel vecchio formato CENED+ 1.2 (DTD ``cened_Versione-1-0-5.dtd`` pubblicato dalla Regione). CENED+2.0 lo converte
   e lo firma col proprio motore (``Trasforma12In20Service``) prima della stessa
   verifica: in una prova locale col motore 1.1.15 il file di un sopralluogo
   completo è stato convertito e ha superato ``verificaValidita``. Serve almeno il

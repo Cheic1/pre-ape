@@ -270,9 +270,9 @@ class ApiClient {
       (await _requestRaw('$_apiPrefix/documents/$documentId/content'))
           .bodyBytes;
 
-  /// `GET /api/v1/surveys/{id}/cened-xml?format=2.0|1.2` → file XML di prova
-  /// per l'importazione in CENED+2.0. Il nome arriva da `Content-Disposition`
-  /// (fallback `cened_<id>_<format>.xml`).
+  /// `GET /api/v1/surveys/{id}/cened-xml?format=2.0|1.2` → .zip con l'XML di
+  /// prova, pronto per l'importazione in CENED+2.0. Il nome arriva da
+  /// `Content-Disposition` (fallback `cened_<id>_<format>.zip`).
   Future<({Uint8List bytes, String filename})> downloadCenedXml(
       String surveyId, String format) async {
     final f = Uri.encodeQueryComponent(format);
@@ -282,7 +282,7 @@ class ApiClient {
       bytes: response.bodyBytes,
       filename: filenameFromContentDisposition(
               response.headers['content-disposition']) ??
-          'cened_${surveyId}_$format.xml',
+          'cened_${surveyId}_$format.zip',
     );
   }
 

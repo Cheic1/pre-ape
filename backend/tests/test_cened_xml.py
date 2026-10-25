@@ -282,10 +282,13 @@ class TestCenedXmlEndpoint:
                                   building=FULL_BUILDING, cadastral=[UNIT_FLAT])
         response = client.get(_url(survey_id, fmt), headers=headers)
         assert response.status_code == 200, response.text
-        assert response.headers["content-type"].startswith("application/xml")
-        expected = f'attachment; filename="preape_{uuid.UUID(survey_id).hex[:8]}_{suffix}.xml"'
-        assert response.headers["content-disposition"] == expected
-        assert ET.fromstring(response.content).tag == root_tag
+        assert response.headers["content-type"] == "application/zip"
+        stem = f"preape_{uuid.UUID(survey_id).hex[:8]}_{suffix}"
+        assert response.headers["content-disposition"] == f'attachment; filename="{stem}.zip"'
+        # CENED importa solo .zip ed estrae l'unico XML contenuto
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            assert archive.namelist() == [f"{stem}.xml"]
+            assert ET.fromstring(archive.read(f"{stem}.xml")).tag == root_tag
 
     def test_other_user_404(self, client, auth_a, auth_b):
         survey_id = create_survey(client, auth_a[0])

@@ -278,7 +278,7 @@ void main() {
         'GET /api/v1/surveys/s-1/cened-xml': (r) => http.Response('<x/>', 200,
             headers: {
               'content-disposition':
-                  'attachment; filename="cened_${r.url.queryParameters['format']}.xml"',
+                  'attachment; filename="cened_${r.url.queryParameters['format']}.zip"',
             }),
       });
       final n = SurveyNotifier()
@@ -287,13 +287,13 @@ void main() {
       expect(find.text('Scarica XML CENED 2.0'), findsOneWidget);
       expect(find.text('Scarica XML CENED 1.2 (formato precedente)'),
           findsOneWidget);
-      expect(find.textContaining('File → Importa file XML'), findsOneWidget);
+      expect(find.textContaining('File → Importa file XML 1.2'), findsOneWidget);
       expect(find.textContaining('Il calcolo dell\'APE resta a carico di CENED'),
           findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('cened_xml_2.0')));
       await tester.pumpAndSettle();
-      expect(find.text('File XML scaricato: cened_2.0.xml'), findsOneWidget);
+      expect(find.text('File CENED scaricato: cened_2.0.zip'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('cened_xml_1.2')));
       await tester.pumpAndSettle();
       final formats = backend.requests

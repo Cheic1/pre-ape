@@ -158,7 +158,7 @@ void main() {
       expect(seen.single.url.queryParameters['format'], '1.2');
       withHeader = false;
       expect((await api.downloadCenedXml('s-1', '1.2')).filename,
-          'cened_s-1_1.2.xml');
+          'cened_s-1_1.2.zip');
     });
 
     test('401 → UnauthorizedException, 404 → NotFoundException', () async {

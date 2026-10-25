@@ -1,5 +1,7 @@
 """CENED+2.0: GET /surveys/{id}/cened-sheet e GET /surveys/{id}/cened-xml."""
+import io
 import logging
+import zipfile
 from typing import Literal
 from uuid import UUID
 
@@ -52,16 +54,23 @@ async def get_cened_xml(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """XML del sopralluogo da provare a importare in CENED+2.0 (stima preliminare)."""
+    """XML del sopralluogo dentro uno .zip, pronto per CENED+2.0 (stima preliminare).
+
+    CENED importa solo archivi .zip: «File → Importa file XML 1.2» (format=1.2)
+    o «File → Importa file XML» (format=2.0) estraggono l'unico XML contenuto.
+    """
     survey = _owned_survey(db, survey_id, current_user)
     build = build_calcolo_xml_20 if format == "2.0" else build_cened_xml_12
     xml = build(survey)
     logger.info("cened-xml %s survey=%s defaults=%d missing=%d",
                 format, survey.id, len(xml.defaults), len(xml.missing))
     suffix = "cened20" if format == "2.0" else "cened12"
-    filename = f"preape_{survey.id.hex[:8]}_{suffix}.xml"
+    name = f"preape_{survey.id.hex[:8]}_{suffix}"
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(f"{name}.xml", xml.content)
     return Response(
-        content=xml.content,
-        media_type="application/xml",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        content=buffer.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{name}.zip"'},
     )
