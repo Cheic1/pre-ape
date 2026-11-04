@@ -29,3 +29,4 @@ La stima resta una **valutazione preliminare**, non sostituisce l'APE.
 
 ### Correzioni dell'ultimo giro di prova
 - Il report non mostra più le coordinate segnaposto di Roma quando la posizione non è stata scelta, e non le salva sul server.
+- L'intervento «Riqualificazione completa» elenca le voci in italiano (non più codici come `pompa_calore`).
