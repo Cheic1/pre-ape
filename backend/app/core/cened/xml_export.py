@@ -44,6 +44,7 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.catasto import CadastralUnit
+from app.core.cened.address import split_address
 from app.core.cened.sheet import _parse_building, _parse_units
 from app.core.energy import climate
 from app.core.energy.engine import Resolved, resolve_inputs
@@ -261,6 +262,12 @@ def _terminal_20(x: _Data) -> Optional[Tuple[int, int, Optional[int]]]:
     return tipo, regol, caratt
 
 
+def _street_20(raw: Optional[str]) -> Optional[str]:
+    """Solo «via civico» (senza quartiere/comune/CAP di OpenStreetMap)."""
+    via, civico = split_address(raw)
+    return " ".join(p for p in (via, civico) if p) or None
+
+
 def build_calcolo_xml_20(survey) -> CenedXml:
     """``calcolo.xml`` CENED+2.0 con i soli dati di input del sopralluogo."""
     x = _Data(survey)
@@ -295,7 +302,7 @@ def build_calcolo_xml_20(survey) -> CenedXml:
         sezioneUrbana=first.sezione_urbana,
         foglio=first.foglio or "ND", particella=first.particella or "ND",
         numeroSopralluoghi=1, piano=first.piano,
-        indirizzo=first.indirizzo or x.address,
+        indirizzo=_street_20(first.indirizzo or x.address),
         destinazioneResidenziale=True, destinazioneNonResidenziale=False,
     )
     if not first.foglio or not first.particella:
@@ -619,13 +626,14 @@ def build_cened_xml_12(survey) -> CenedXml:
         ("interventi_migliorativi", []),
     ])
     sigla = x.comune.provincia if x.comune else (first.provincia or "")
+    via, civico = split_address(first.indirizzo or x.address)
     dati = ("dati", [
         ("software", [("nome", SOFTWARE_NAME), ("versione", "1.0"), ("cod_posizione", "")]),
         *_empty("cod_certificatore", "rif_procedura", "protocollo"),
         ("provincia", sigla),
         ("comune", x.comune.nome if x.comune else (first.comune or "")),
         ("codice_istat", x.istat or ""),
-        ("indirizzo", first.indirizzo or x.address or ""), ("ncivico", ""),
+        ("indirizzo", via), ("ncivico", civico),
         ("sezione_amministrativa", ""), ("sezione_urbana", first.sezione_urbana or ""),
         ("foglio", first.foglio or ""), ("particella", first.particella or ""),
         ("proprietario", _empty("nome", "cognome", "ragione_sociale")),

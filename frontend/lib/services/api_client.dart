@@ -39,21 +39,21 @@ class ApiException implements Exception {
 
 /// 401 – token assente/invalido/scaduto.
 class UnauthorizedException extends ApiException {
-  UnauthorizedException(String message, {Object? detail})
-      : super(401, message, detail: detail);
+  UnauthorizedException(String message, {super.detail})
+      : super(401, message);
 }
 
 /// 404 – survey inesistente **oppure** non posseduto dall'utente (nessun
 /// oracolo di esistenza: il contratto risponde uguale nei due casi).
 class NotFoundException extends ApiException {
-  NotFoundException(String message, {Object? detail})
-      : super(404, message, detail: detail);
+  NotFoundException(String message, {super.detail})
+      : super(404, message);
 }
 
 /// 422 – validazione: `detail` contiene `loc`/`msg`/`type` per campo.
 class ValidationException extends ApiException {
-  ValidationException(String message, {Object? detail})
-      : super(422, message, detail: detail);
+  ValidationException(String message, {super.detail})
+      : super(422, message);
 }
 
 /// Nessuna risposta entro [ApiClient.timeout].

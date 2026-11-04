@@ -238,6 +238,7 @@ class TestCened12:
         assert root.findtext("provincia") == "MI"
         assert root.findtext("comune") == "Milano"
         assert (root.findtext("foglio"), root.findtext("particella")) == ("123", "45")
+        assert (root.findtext("indirizzo"), root.findtext("ncivico")) == ("Via Roma", "1")
         assert root.findtext("software/nome") == "Pre-APE"
         assert "stima preliminare" in root.findtext("note_specifiche")
         subs = root.findall("ace/subalterni/dati_subalterno")
@@ -251,6 +252,14 @@ class TestCened12:
         assert root.findtext("ace/pannelli_solari/dati_pannello_solare/potenza_di_picco") == "3.5"
         assert root.find("ace/risultati/classe").text is None  # nessun risultato inventato
         assert "stima preliminare" in _comment(xml.content)
+
+    def test_osm_address_split(self):
+        osm = "8, Via Pietro Spino, Carnovali, Bergamo, Lombardia, 24126, Italia"
+        survey = _survey(address=osm, square_meters=95.0, building=FULL_BUILDING)
+        root = _parse(build_cened_xml_12(survey).content)
+        assert (root.findtext("indirizzo"), root.findtext("ncivico")) == ("Via Pietro Spino", "8")
+        edificio = _parse(build_calcolo_xml_20(survey).content)
+        assert edificio.find(".//{*}datiEdificio").get("indirizzo") == "Via Pietro Spino 8"
 
     @pytest.mark.parametrize("make", [_empty_survey, _full_survey])
     def test_valid_against_dtd(self, dtd, make):
