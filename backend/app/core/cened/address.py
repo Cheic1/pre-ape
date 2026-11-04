@@ -38,3 +38,9 @@ def split_address(raw: Optional[str]) -> Tuple[str, str]:
     if tail:
         return tail.group(1).strip(), tail.group(2).replace(" ", "")
     return street, ""
+
+
+def street_line(raw: Optional[str]) -> Optional[str]:
+    """«Via civico» (senza quartiere, comune e CAP di OpenStreetMap), o None."""
+    via, civico = split_address(raw)
+    return " ".join(p for p in (via, civico) if p) or None

@@ -1,7 +1,7 @@
 """Separazione via / numero civico per l'export CENED (pure, niente DB)."""
 import pytest
 
-from app.core.cened.address import split_address
+from app.core.cened.address import split_address, street_line
 
 
 @pytest.mark.parametrize("raw, expected", [
@@ -25,3 +25,9 @@ from app.core.cened.address import split_address
 ])
 def test_split_address(raw, expected):
     assert split_address(raw) == expected
+
+
+def test_street_line():
+    assert street_line("8, Via Pietro Spino, Carnovali, Bergamo, Italia") == "Via Pietro Spino 8"
+    assert street_line("Via Roma 1, Milano") == "Via Roma 1"
+    assert street_line(None) is None

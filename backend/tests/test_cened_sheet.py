@@ -113,6 +113,7 @@ class TestCompleteSurvey:
         assert rows["Comune"].status == "ok"
         assert rows["Comune"].cened_field == "servizioDatiClimatici@codiceIstat"
         assert rows["Provincia"].value == "MI"
+        assert rows["Indirizzo"].value == "Via Roma 1"  # senza comune: va nei campi propri
         assert rows["Zona climatica"].value == "E"
         assert rows["Gradi giorno"].value == "2404"
         assert rows["Anno di costruzione"].value == "1965"

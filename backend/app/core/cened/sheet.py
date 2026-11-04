@@ -26,6 +26,7 @@ from uuid import UUID
 from pydantic import BaseModel, ValidationError
 
 from app.core.catasto import CadastralUnit
+from app.core.cened.address import street_line
 from app.core.energy import climate
 from app.core.energy.engine import BOILERS, GENERATOR_LABEL, _LEGACY_GENERATOR, _LEGACY_HEATING
 from app.core.energy.inputs import BuildingInputs
@@ -304,7 +305,7 @@ def _edificio(c: _Ctx) -> CenedSection:
         _row("Comune", comune, "servizioDatiClimatici@codiceIstat", "ok"),
         _row("Codice ISTAT comune", found.istat if found else None, "datiEdificio@comune", "ok"),
         _row("Provincia", provincia, "datiEdificio@provincia", "ok"),
-        _row("Indirizzo", c.legacy("address"), "datiEdificio@indirizzo", "ok"),
+        _row("Indirizzo", street_line(c.legacy("address")), "datiEdificio@indirizzo", "ok"),
         zona,
         gg,
         c.pick("Anno di costruzione", "datiEdificio@annoCostruzione", b.anno_costruzione, str,
