@@ -151,7 +151,7 @@ String buildReportHtml(SurveyData s, {CenedSheet? cened}) {
     ${_row('Riferimento', s.title)}
     ${_row('Cliente', s.clientName)}
     ${_row('Indirizzo', s.address)}
-    ${_row('Coordinate', '${s.latitude.toStringAsFixed(5)}, ${s.longitude.toStringAsFixed(5)}')}
+    ${s.hasLocation ? _row('Coordinate', '${s.latitude.toStringAsFixed(5)}, ${s.longitude.toStringAsFixed(5)}') : ''}
     ${_row('Comune', r?.comune?.label, assumed: assumed.contains('comune'))}
     ${_row('Zona climatica / gradi giorno', r == null ? null : '${r.zona} / ${r.gradiGiorno} GG')}
   </table>

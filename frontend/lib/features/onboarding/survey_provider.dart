@@ -42,6 +42,11 @@ class SurveyData {
   double latitude = _defaultLatLng.lat;
   double longitude = _defaultLatLng.lng;
 
+  /// False while the coordinates are still the centre-of-Italy placeholder:
+  /// then they are neither sent to the server nor printed in the report.
+  bool get hasLocation =>
+      latitude != _defaultLatLng.lat || longitude != _defaultLatLng.lng;
+
   /// True while the browser Geolocation request is in flight.
   bool locating = false;
 
@@ -232,8 +237,8 @@ class SurveyNotifier extends ChangeNotifier {
         'avg_height': _data.avgHeight,
         if (_data.address != null && _data.address!.isNotEmpty)
           'address': _data.address,
-        'latitude': _data.latitude,
-        'longitude': _data.longitude,
+        if (_data.hasLocation) 'latitude': _data.latitude,
+        if (_data.hasLocation) 'longitude': _data.longitude,
         'building': <String, Object?>{
           for (final e in _data.building.entries)
             if (e.value != null) e.key: e.value,
@@ -248,8 +253,8 @@ class SurveyNotifier extends ChangeNotifier {
       notes: _data.notes,
       status: status,
       address: _data.address,
-      latitude: _data.latitude,
-      longitude: _data.longitude,
+      latitude: _data.hasLocation ? _data.latitude : null,
+      longitude: _data.hasLocation ? _data.longitude : null,
       squareMeters: _data.squareMeters,
       avgHeight: _data.avgHeight,
       building: Map<String, Object?>.of(_data.building),
