@@ -765,6 +765,15 @@ def _evaluate(r: Resolved) -> dict:
     }
 
 
+# Voci brevi per l'etichetta della «Riqualificazione completa».
+_SHORT_LABEL = {
+    "cappotto": "cappotto", "copertura": "copertura", "pavimento": "solaio",
+    "infissi": "infissi", "pompa_calore": "pompa di calore",
+    "condensazione": "caldaia a condensazione", "valvole": "valvole termostatiche",
+    "fotovoltaico": "fotovoltaico", "solare_termico": "solare termico",
+}
+
+
 def _improvements(r: Resolved, base: dict) -> List[dict]:
     geo: Geometry = base["geo"]
     env: Envelope = base["env"]
@@ -843,7 +852,7 @@ def _improvements(r: Resolved, base: dict) -> List[dict]:
             v = o["_variant"]
             combo = _merge(combo, v, r)
             invest += o["investimento_eur"]
-            chosen.append(o["codice"])
+            chosen.append(_SHORT_LABEL.get(o["codice"], o["codice"].replace("_", " ")))
         res = _evaluate(combo)
         saving_ep = base_ep - res["ep"]["gl_nren"]
         saving_eur = base_cost - res["cost"]
