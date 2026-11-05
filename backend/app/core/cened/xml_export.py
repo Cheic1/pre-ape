@@ -162,6 +162,28 @@ class _Data:
     def province_code(self, istat: Optional[str]) -> str:
         return istat[:3] if istat else ""
 
+    def street(self) -> Tuple[str, str]:
+        """(via, civico) per i campi separati di CENED: indirizzo catastale o del sopralluogo."""
+        return split_address(self.first_unit().indirizzo or self.address)
+
+
+_CIVICO = r"\d+\s*(?:/\s*\w+|[A-Za-z])?"
+
+
+def split_address(address: Optional[str]) -> Tuple[str, str]:
+    """Separa via e civico: «8, Via Pietro Spino, Bergamo, …» (Nominatim) o
+    «Via Roma 12/A, Milano» -> («Via Pietro Spino», «8») / («Via Roma», «12/A»).
+    Senza civico riconoscibile restituisce il primo pezzo e "" ."""
+    parts = [p.strip() for p in (address or "").split(",") if p.strip()]
+    if not parts:
+        return "", ""
+    if len(parts) > 1 and re.fullmatch(_CIVICO, parts[0]):
+        return parts[1], re.sub(r"\s+", "", parts[0])
+    match = re.fullmatch(rf"(.*?\D)\s*(?:n\.?\s*)?({_CIVICO})", parts[0])
+    if match and match.group(1).strip():
+        return match.group(1).strip(), re.sub(r"\s+", "", match.group(2))
+    return parts[0], ""
+
 
 def _is_heated(categoria: Optional[str]) -> bool:
     """Residenziale (A/1…A/9, A/11) o categoria ignota -> zona climatizzata."""
@@ -295,7 +317,7 @@ def build_calcolo_xml_20(survey) -> CenedXml:
         sezioneUrbana=first.sezione_urbana,
         foglio=first.foglio or "ND", particella=first.particella or "ND",
         numeroSopralluoghi=1, piano=first.piano,
-        indirizzo=first.indirizzo or x.address,
+        indirizzo=x.street()[0], civico=x.street()[1],
         destinazioneResidenziale=True, destinazioneNonResidenziale=False,
     )
     if not first.foglio or not first.particella:
@@ -545,6 +567,11 @@ def build_cened_xml_12(survey) -> CenedXml:
         x.default("Combustibile", "metano (default stima)")
     if not x.power_kw:
         x.missing.append("Potenza nominale del generatore")
+    if r.generatore in ("caldaia_tradizionale", "caldaia_condensazione"):
+        # generatore_tradizionale/_condensazione 1.2 non hanno l'anno: il convertitore
+        # CENED mette annoInstallazioneImpianto = anno corrente (verificato col motore 1.1.15)
+        x.missing.append(f"Anno di installazione del generatore ({r.anno_gen}): il formato 1.2 "
+                         "non lo prevede, CENED propone l'anno corrente")
     term_text = TERMINALE_12.get(r.terminali, "")
     if not term_text:
         x.missing.append(f"Terminali di emissione: {r.terminali} (da inserire in CENED)")
@@ -625,7 +652,7 @@ def build_cened_xml_12(survey) -> CenedXml:
         ("provincia", sigla),
         ("comune", x.comune.nome if x.comune else (first.comune or "")),
         ("codice_istat", x.istat or ""),
-        ("indirizzo", first.indirizzo or x.address or ""), ("ncivico", ""),
+        ("indirizzo", x.street()[0]), ("ncivico", x.street()[1]),
         ("sezione_amministrativa", ""), ("sezione_urbana", first.sezione_urbana or ""),
         ("foglio", first.foglio or ""), ("particella", first.particella or ""),
         ("proprietario", _empty("nome", "cognome", "ragione_sociale")),

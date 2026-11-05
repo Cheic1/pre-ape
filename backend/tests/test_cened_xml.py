@@ -22,6 +22,7 @@ from app.core.cened.xml_export import (
     NS_DATI,
     build_calcolo_xml_20,
     build_cened_xml_12,
+    split_address,
 )
 from app.core.energy import BuildingInputs
 from app.models.database import Survey
@@ -220,6 +221,22 @@ class TestCalcolo20:
 # ---------------------------------------------------------------------------
 # Formato 1.2
 # ---------------------------------------------------------------------------
+@pytest.mark.parametrize("address,expected", [
+    ("8, Via Pietro Spino, Carnovali, Bergamo, Lombardia, 24126, Italia",
+     ("Via Pietro Spino", "8")),                                    # Nominatim
+    ("Via Roma 1, Milano", ("Via Roma", "1")),
+    ("Via Roma n. 12/A", ("Via Roma", "12/A")),
+    ("Corso Italia 7b", ("Corso Italia", "7b")),
+    ("Via XXV Aprile, Busnago", ("Via XXV Aprile", "")),
+    ("Via 25 Aprile", ("Via 25 Aprile", "")),
+    ("Via Piave, Busnago, Monza e Brianza, Lombardia, 10874, Italia", ("Via Piave", "")),
+    (None, ("", "")),
+    ("", ("", "")),
+])
+def test_split_address(address, expected):
+    assert split_address(address) == expected
+
+
 class TestCened12:
     def test_empty_survey_well_formed(self):
         xml = build_cened_xml_12(_empty_survey())
@@ -238,6 +255,9 @@ class TestCened12:
         assert root.findtext("provincia") == "MI"
         assert root.findtext("comune") == "Milano"
         assert (root.findtext("foglio"), root.findtext("particella")) == ("123", "45")
+        assert (root.findtext("indirizzo"), root.findtext("ncivico")) == ("Via Roma", "1")
+        # il convertitore CENED mette l'anno corrente: lo segnaliamo
+        assert any("Anno di installazione del generatore (2010)" in m for m in xml.missing)
         assert root.findtext("software/nome") == "Pre-APE"
         assert "stima preliminare" in root.findtext("note_specifiche")
         subs = root.findall("ace/subalterni/dati_subalterno")
