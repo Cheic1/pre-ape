@@ -15,6 +15,7 @@ import 'package:pre_ape/features/auth/auth_provider.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
 import 'package:pre_ape/features/onboarding/survey_save.dart';
 import 'package:pre_ape/features/onboarding/wizard_widgets.dart';
+import 'package:pre_ape/features/planimetria/floor_plan_page.dart';
 import 'package:pre_ape/features/web/web_download_stub.dart'
     if (dart.library.js_interop) 'package:pre_ape/features/web/web_download.dart';
 import 'package:pre_ape/features/web/web_file_picker_stub.dart'
@@ -211,6 +212,15 @@ class _CatastoSectionState extends ConsumerState<CatastoSection> {
     } on ApiException catch (e) {
       await _handleError(e);
     }
+  }
+
+  Future<void> _openCad(DocumentMeta doc) async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => FloorPlanPage(document: doc),
+    ));
+    if (!mounted) return;
+    _docsFor = null; // aggiorna il riepilogo del disegno estratto
+    await _loadDocs();
   }
 
   Future<void> _delete(DocumentMeta doc) async {
@@ -425,6 +435,13 @@ class _CatastoSectionState extends ConsumerState<CatastoSection> {
               ],
             ),
           ),
+          if (d.supportsCad)
+            IconButton(
+              key: ValueKey('document_cad_${d.id}'),
+              tooltip: 'Disegno CAD e 3D',
+              onPressed: () => _openCad(d),
+              icon: const Icon(Icons.architecture, color: AppColors.accent),
+            ),
           IconButton(
             key: ValueKey('document_download_${d.id}'),
             tooltip: 'Scarica',
