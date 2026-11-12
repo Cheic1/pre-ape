@@ -3,6 +3,11 @@
 Formato ispirato a [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni [SemVer](https://semver.org/lang/it/).
 La versione è la stessa per app (`frontend/pubspec.yaml`) e backend (`backend/pyproject.toml`); il tag git è `vX.Y.Z`.
 
+## [Non rilasciato]
+
+### Corretto
+- Pannello amministratore: aprendo il sopralluogo di un altro utente (es. un geometra), la scheda CENED e lo .zip CENED davano «non disponibile (404)». Ora arrivano da `/admin/surveys/{id}/cened-sheet` e `/admin/surveys/{id}/cened-xml`, con la riga nel registro accessi.
+
 ## [1.0.0] – 2026-11-04
 
 Prima release ufficiale: Pre-APE è pronto per i primi geometri su preape.cheic2.it.
