@@ -32,6 +32,7 @@ import 'catasto.dart';
 import 'energy.dart';
 
 export 'catasto.dart';
+export 'floor_plan.dart';
 
 /// Corpo di `POST /api/v1/surveys` e `PUT /api/v1/surveys/{id}`
 /// (gli schema contrattuali `SurveyCreate` e `SurveyUpdate` sono identici).

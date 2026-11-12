@@ -4,6 +4,8 @@
 /// (sezioni 1 e 3). Riesportati da `survey.dart`.
 library;
 
+import 'floor_plan.dart';
+
 /// Numero massimo di unità catastali per sopralluogo (`MAX_CADASTRAL_UNITS`).
 const int kMaxCadastralUnits = 20;
 
@@ -229,6 +231,7 @@ class DocumentMeta {
     required this.createdAt,
     this.uploadedBy,
     this.extracted,
+    this.cadStats,
   });
 
   factory DocumentMeta.fromJson(Map<String, dynamic> json) => DocumentMeta(
@@ -246,6 +249,9 @@ class DocumentMeta {
             ?.whereType<Map<String, dynamic>>()
             .map(CadastralUnit.fromJson)
             .toList(growable: false),
+        cadStats: json['cad_stats'] is Map<String, dynamic>
+            ? PlanStats.fromJson(json['cad_stats'] as Map<String, dynamic>)
+            : null,
       );
 
   final String id;
@@ -262,6 +268,13 @@ class DocumentMeta {
   /// Unità proposte dal parser della visura (solo `kind == visura` PDF;
   /// null negli altri casi, lista vuota se nulla è stato riconosciuto).
   final List<CadastralUnit>? extracted;
+
+  /// Riepilogo del disegno CAD già estratto dalla planimetria (null se mai
+  /// estratto).
+  final PlanStats? cadStats;
+
+  /// Solo le planimetrie si possono convertire in disegno CAD.
+  bool get supportsCad => kind == 'planimetria';
 
   String get kindLabel => kDocumentKinds[kind] ?? kind;
 }
