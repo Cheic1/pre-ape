@@ -14,6 +14,7 @@ from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session, defer
 
@@ -21,6 +22,8 @@ from app.api.v1 import get_current_user, get_db
 from app.core.catasto import CadastralUnit
 from app.core.catasto.visura import parse_visura_pdf
 from app.core.crypto import DocumentDecryptionError, decrypt_document, encrypt_document
+from app.core.planimetria import CadParams, FloorPlan, PlanStats, extract_floor_plan
+from app.core.planimetria.export import to_dxf, to_obj
 from app.models.database import Survey, SurveyDocument, User
 
 logger = logging.getLogger(__name__)
@@ -47,6 +50,8 @@ class DocumentMeta(BaseModel):
     size_bytes: int
     uploaded_by: Optional[UploaderInfo] = None
     extracted: Optional[List[CadastralUnit]] = None
+    # Riepilogo della geometria estratta dalla planimetria (POST …/cad), o null.
+    cad_stats: Optional[PlanStats] = None
     created_at: datetime
 
 
@@ -65,6 +70,7 @@ def document_meta(doc: SurveyDocument, uploader=None) -> DocumentMeta:
             else None
         ),
         extracted=doc.extracted,
+        cad_stats=(doc.cad or {}).get("stats"),
         created_at=doc.created_at,
     )
 
@@ -238,3 +244,92 @@ async def delete_document(
     db.delete(_owned_document(db, doc_id, current_user))
     db.commit()
     return None
+
+
+# ---------------------------------------------------------------------------
+# Planimetria → disegno CAD (DXF 2D + 3D, OBJ)
+# ---------------------------------------------------------------------------
+def _decrypted(doc: SurveyDocument) -> bytes:
+    try:
+        return decrypt_document(doc.content)
+    except DocumentDecryptionError:
+        logger.error("Documento %s non decifrabile", doc.id)
+        raise HTTPException(status_code=500, detail="Documento non leggibile")
+
+
+def _stored_plan(doc: SurveyDocument) -> FloorPlan:
+    if not doc.cad:
+        raise HTTPException(
+            status_code=404, detail="Disegno non ancora estratto (POST /documents/{id}/cad)"
+        )
+    return FloorPlan.model_validate(doc.cad)
+
+
+def _cad_filename(doc: SurveyDocument, ext: str) -> str:
+    stem = doc.filename.rsplit(".", 1)[0] or "planimetria"
+    return f"{stem}_cad.{ext}"
+
+
+def _attachment(content: bytes, media_type: str, filename: str) -> Response:
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.post("/documents/{doc_id}/cad", response_model=FloorPlan)
+async def extract_cad(
+    doc_id: UUID,
+    body: Optional[CadParams] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Estrae (o ri-estrae con i parametri corretti) muri, vani e aperture."""
+    doc = _owned_document(db, doc_id, current_user)
+    if doc.kind != "planimetria":
+        raise HTTPException(status_code=422, detail="Disponibile solo per le planimetrie")
+    data = _decrypted(doc)
+    try:
+        plan = await run_in_threadpool(extract_floor_plan, data, doc.mime_type, body)
+    except ValueError as exc:  # anche NoWallsFound
+        raise HTTPException(status_code=422, detail=str(exc))
+    doc.cad = plan.model_dump(mode="json")
+    db.commit()
+    return plan
+
+
+@router.get("/documents/{doc_id}/cad", response_model=FloorPlan)
+async def get_cad(
+    doc_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return _stored_plan(_owned_document(db, doc_id, current_user))
+
+
+@router.get("/documents/{doc_id}/cad.dxf", response_class=Response)
+async def download_cad_dxf(
+    doc_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    doc = _owned_document(db, doc_id, current_user)
+    plan = _stored_plan(doc)
+    content = await run_in_threadpool(to_dxf, plan, doc.filename)
+    return _attachment(content, "image/vnd.dxf", _cad_filename(doc, "dxf"))
+
+
+@router.get("/documents/{doc_id}/cad.obj", response_class=Response)
+async def download_cad_obj(
+    doc_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    doc = _owned_document(db, doc_id, current_user)
+    plan = _stored_plan(doc)
+    content = await run_in_threadpool(to_obj, plan, doc.filename)
+    return _attachment(content, "model/obj", _cad_filename(doc, "obj"))

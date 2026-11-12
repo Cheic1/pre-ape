@@ -307,6 +307,45 @@ class ApiClient {
     return name == null || name.isEmpty ? null : name;
   }
 
+  /// `POST /api/v1/documents/{id}/cad` → estrae (o ri-estrae con scala,
+  /// altezza o calibrazione corrette) il disegno dalla planimetria.
+  /// 422 se il documento non è una planimetria o non ha muri riconoscibili.
+  Future<FloorPlan> extractCad(
+    String documentId, {
+    int? scaleDenominator,
+    double? wallHeightM,
+    double? metersPerPx,
+  }) async {
+    final json = await _request(
+      'POST',
+      '$_apiPrefix/documents/$documentId/cad',
+      body: <String, Object?>{
+        if (scaleDenominator != null) 'scale_denominator': scaleDenominator,
+        if (wallHeightM != null) 'wall_height_m': wallHeightM,
+        if (metersPerPx != null) 'meters_per_px': metersPerPx,
+      },
+    );
+    return FloorPlan.fromJson(json);
+  }
+
+  /// `GET /api/v1/documents/{id}/cad` → ultimo disegno estratto (404 se mai).
+  Future<FloorPlan> getCad(String documentId) async =>
+      FloorPlan.fromJson(
+          await _request('GET', '$_apiPrefix/documents/$documentId/cad'));
+
+  /// `GET /api/v1/documents/{id}/cad.{dxf|obj}` → file CAD da scaricare.
+  Future<({Uint8List bytes, String filename})> downloadCad(
+      String documentId, String format) async {
+    final response =
+        await _requestRaw('$_apiPrefix/documents/$documentId/cad.$format');
+    return (
+      bytes: response.bodyBytes,
+      filename: filenameFromContentDisposition(
+              response.headers['content-disposition']) ??
+          'planimetria_cad.$format',
+    );
+  }
+
   /// `DELETE /api/v1/documents/{id}` → 204 | 404.
   Future<void> deleteDocument(String documentId) async {
     await _requestAny('DELETE', '$_apiPrefix/documents/$documentId');
