@@ -13,7 +13,8 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../features/admin/admin_models.dart';
-import '../models/survey.dart' show SurveyCreate, SurveyRead, SurveySummary;
+import '../models/survey.dart'
+    show CenedSheet, SurveyCreate, SurveyRead, SurveySummary;
 import 'api_client.dart';
 
 /// 403 – l'utente non è (più) amministratore.
@@ -95,6 +96,26 @@ class AdminApi {
   /// `DELETE /admin/surveys/{id}` → 204.
   Future<void> deleteSurvey(String id) async {
     await _json('DELETE', '$_prefix/surveys/$id');
+  }
+
+  // ── CENED ───────────────────────────────────────────────────────────
+
+  /// `GET /admin/surveys/{id}/cened-sheet` → scheda CENED di qualsiasi utente.
+  Future<CenedSheet> getCenedSheet(String surveyId) async => CenedSheet.fromJson(
+      _map(await _json('GET', '$_prefix/surveys/$surveyId/cened-sheet')));
+
+  /// `GET /admin/surveys/{id}/cened-xml?format=2.0|1.2` → lo stesso .zip che
+  /// scarica il proprietario.
+  Future<({Uint8List bytes, String filename})> downloadCenedXml(
+      String surveyId, String format) async {
+    final f = Uri.encodeQueryComponent(format);
+    final response =
+        await _send('GET', '$_prefix/surveys/$surveyId/cened-xml?format=$f');
+    return (
+      bytes: response.bodyBytes,
+      filename: _filenameFrom(response.headers['content-disposition']) ??
+          'cened_${surveyId}_$format.zip',
+    );
   }
 
   // ── Documenti ───────────────────────────────────────────────────────
@@ -238,6 +259,8 @@ class AdminApi {
 
 /// [ApiClient] che, per il wizard aperto da un amministratore sul sopralluogo
 /// di un altro utente, legge e salva tramite `/admin/surveys/{id}`.
+/// La scheda CENED e lo .zip CENED passano da `/admin/surveys/{id}/cened-*`:
+/// le rotte normali sono solo del proprietario e all'admin darebbero 404.
 /// Le altre chiamate (stima, comuni…) restano quelle normali.
 class AdminSurveyClient extends ApiClient {
   AdminSurveyClient(this.admin, {super.client})
@@ -259,6 +282,15 @@ class AdminSurveyClient extends ApiClient {
   @override
   Future<SurveyRead> updateSurvey(String id, SurveyCreate body) =>
       admin.updateSurvey(id, body);
+
+  @override
+  Future<CenedSheet> getCenedSheet(String surveyId) =>
+      admin.getCenedSheet(surveyId);
+
+  @override
+  Future<({Uint8List bytes, String filename})> downloadCenedXml(
+          String surveyId, String format) =>
+      admin.downloadCenedXml(surveyId, format);
 
   /// Un amministratore non crea sopralluoghi a nome di altri.
   @override

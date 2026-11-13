@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
 from sqlalchemy.orm import Session, defer
@@ -26,7 +26,9 @@ from app.api.v1 import (
     get_db,
     is_admin,
 )
+from app.api.v1.cened import FORMAT_QUERY, CenedFormat, cened_sheet_for, cened_xml_response
 from app.api.v1.documents import DocumentMeta, document_content_response, document_meta
+from app.core.cened.sheet import CenedSheet
 from app.models.database import AdminAuditLog, PhotoAnalysis, Survey, SurveyDocument, User
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -269,6 +271,36 @@ async def delete_survey(
     db.delete(survey)
     db.commit()
     return None
+
+
+# ---------------------------------------------------------------------------
+# CENED (same output as /surveys/{id}/cened-*, for any user's survey)
+# ---------------------------------------------------------------------------
+@router.get("/surveys/{survey_id}/cened-sheet", response_model=CenedSheet)
+async def view_cened_sheet(
+    survey_id: UUID, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    survey = _get_survey(db, survey_id)
+    sheet = cened_sheet_for(db, survey)
+    _audit(db, admin, "view_cened_sheet", "survey", survey.id,
+           {"owner_email": _owner_email(db, survey)})
+    db.commit()
+    return sheet
+
+
+@router.get("/surveys/{survey_id}/cened-xml")
+async def download_cened_xml(
+    survey_id: UUID,
+    format: CenedFormat = FORMAT_QUERY,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Response:
+    survey = _get_survey(db, survey_id)
+    response = cened_xml_response(survey, format)
+    _audit(db, admin, "download_cened_xml", "survey", survey.id,
+           {"owner_email": _owner_email(db, survey), "format": format})
+    db.commit()
+    return response
 
 
 # ---------------------------------------------------------------------------

@@ -5,9 +5,11 @@ import 'package:pre_ape/features/auth/auth_provider.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
 import 'package:pre_ape/services/api_client.dart';
 
-/// Client used by [saveSurvey]. The admin panel overrides it in a nested
-/// `ProviderScope` around the wizard so that another user's survey is saved
-/// via `PUT /admin/surveys/{id}`; everyone else gets [apiClientProvider].
+/// Client used by [saveSurvey] and by the CENED card (sheet + .zip). The admin
+/// panel overrides it in a nested `ProviderScope` around the wizard so that
+/// another user's survey is saved via `PUT /admin/surveys/{id}` and its CENED
+/// files come from `/admin/surveys/{id}/cened-*`; everyone else gets
+/// [apiClientProvider].
 final surveySaveApiProvider =
     Provider<ApiClient>((ref) => ref.watch(apiClientProvider));
 

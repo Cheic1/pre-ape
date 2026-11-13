@@ -169,6 +169,35 @@ void main() {
       expect(seen, ['GET /api/v1/admin/surveys/s-1', 'PUT /api/v1/admin/surveys/s-1']);
     });
 
+    test('wizard admin: scheda e .zip CENED da /admin/surveys/{id}/cened-*',
+        () async {
+      final seen = <String>[];
+      final client = AdminSurveyClient(_admin((req) async {
+        seen.add('${req.method} ${req.url.path}?${req.url.query}');
+        if (req.url.path.endsWith('/cened-sheet')) {
+          return _json({
+            'survey_id': 's-1',
+            'generated_at': '2026-11-12T10:00:00Z',
+            'disclaimer': 'Stima preliminare',
+            'sections': <Object>[],
+          });
+        }
+        return http.Response.bytes([0x50, 0x4b, 3, 4], 200, headers: {
+          'content-type': 'application/zip',
+          'content-disposition': 'attachment; filename="preape_s1_cened12.zip"',
+        });
+      }));
+      final sheet = await client.getCenedSheet('s-1');
+      final file = await client.downloadCenedXml('s-1', '1.2');
+      expect(sheet.surveyId, 's-1');
+      expect(file.filename, 'preape_s1_cened12.zip');
+      expect(file.bytes, [0x50, 0x4b, 3, 4]);
+      expect(seen, [
+        'GET /api/v1/admin/surveys/s-1/cened-sheet?',
+        'GET /api/v1/admin/surveys/s-1/cened-xml?format=1.2',
+      ]);
+    });
+
     test('AdminApi.from condivide base URL e token con ApiClient', () async {
       final main = ApiClient(baseUrl: _base);
       String? auth;

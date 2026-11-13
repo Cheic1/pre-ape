@@ -76,6 +76,8 @@ ADMIN_CALLS = [
     ("put", f"/api/v1/admin/surveys/{uuid.uuid4()}"),
     ("delete", f"/api/v1/admin/surveys/{uuid.uuid4()}"),
     ("get", f"/api/v1/admin/surveys/{uuid.uuid4()}/documents"),
+    ("get", f"/api/v1/admin/surveys/{uuid.uuid4()}/cened-sheet"),
+    ("get", f"/api/v1/admin/surveys/{uuid.uuid4()}/cened-xml?format=1.2"),
     ("get", f"/api/v1/admin/documents/{uuid.uuid4()}/content"),
     ("delete", f"/api/v1/admin/documents/{uuid.uuid4()}"),
     ("delete", f"/api/v1/admin/users/{uuid.uuid4()}?confirm_email=x@example.test"),
@@ -222,6 +224,40 @@ def test_view_update_delete_survey(client, admin, auth_a):
 
     missing = client.get(f"/api/v1/admin/surveys/{survey_id}", headers=admin_headers)
     assert missing.status_code == 404
+
+
+def test_cened_sheet_and_xml_of_another_users_survey(client, admin, auth_a):
+    """L'admin che apre il sopralluogo di un geometra scarica la stessa scheda/zip."""
+    admin_headers, _, admin_email = admin
+    headers_a, _ = auth_a
+    survey_id = create_survey(client, headers_a, square_meters=80)
+
+    # le rotte normali restano solo del proprietario, anche per l'admin
+    assert client.get(f"/api/v1/surveys/{survey_id}/cened-xml?format=1.2",
+                      headers=admin_headers).status_code == 404
+
+    owner_sheet = client.get(f"/api/v1/surveys/{survey_id}/cened-sheet", headers=headers_a)
+    response = client.get(f"/api/v1/admin/surveys/{survey_id}/cened-sheet", headers=admin_headers)
+    assert response.status_code == 200
+    same = lambda body: {k: v for k, v in body.items() if k != "generated_at"}  # noqa: E731
+    assert same(response.json()) == same(owner_sheet.json())
+    row = _last_audit(admin_email)
+    assert (row.action, row.target_id) == ("view_cened_sheet", survey_id)
+
+    owner_zip = client.get(f"/api/v1/surveys/{survey_id}/cened-xml?format=1.2", headers=headers_a)
+    response = client.get(f"/api/v1/admin/surveys/{survey_id}/cened-xml?format=1.2",
+                          headers=admin_headers)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    assert response.headers["content-disposition"] == owner_zip.headers["content-disposition"]
+    row = _last_audit(admin_email)
+    assert (row.action, row.target_id) == ("download_cened_xml", survey_id)
+    assert row.detail["format"] == "1.2"
+
+    assert client.get(f"/api/v1/admin/surveys/{uuid.uuid4()}/cened-xml",
+                      headers=admin_headers).status_code == 404
+    assert client.get(f"/api/v1/admin/surveys/{survey_id}/cened-xml?format=9",
+                      headers=admin_headers).status_code == 422
 
 
 def test_delete_survey_with_photo_analyses_and_documents(client, admin, auth_a):

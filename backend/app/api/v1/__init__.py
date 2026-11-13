@@ -122,6 +122,8 @@ except GET /admin/audit writes an admin_audit_log row (same transaction).
   GET    /api/v1/admin/surveys/{id}/documents   -> 200 [DocumentMeta] | 404
   GET    /api/v1/admin/documents/{id}/content   -> 200 bytes | 404
   DELETE /api/v1/admin/documents/{id}           -> 204 | 404
+  GET    /api/v1/admin/surveys/{id}/cened-sheet -> 200 CenedSheet | 404 (any owner)
+  GET    /api/v1/admin/surveys/{id}/cened-xml?format=2.0|1.2 -> 200 .zip | 404
   GET    /api/v1/admin/audit?limit=100&offset=0 -> 200 [AuditEntry] (newest first)
   The normal /surveys endpoints stay owner-only for admins too.
 

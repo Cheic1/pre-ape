@@ -1,4 +1,8 @@
-"""CENED+2.0: GET /surveys/{id}/cened-sheet e GET /surveys/{id}/cened-xml."""
+"""CENED+2.0: GET /surveys/{id}/cened-sheet e GET /surveys/{id}/cened-xml.
+
+Le stesse risposte per l'amministratore (sopralluoghi di altri utenti) sono in
+``app.api.v1.admin`` e riusano :func:`cened_sheet_for` / :func:`cened_xml_response`.
+"""
 import io
 import logging
 import zipfile
@@ -17,6 +21,9 @@ from app.models.database import Survey, SurveyDocument, User
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+CenedFormat = Literal["2.0", "1.2"]
+FORMAT_QUERY = Query("2.0", description="2.0 = calcolo.xml, 1.2 = CENED+ 1.2")
+
 
 def _owned_survey(db: Session, survey_id: UUID, user: User) -> Survey:
     survey = db.query(Survey).filter(
@@ -34,7 +41,11 @@ async def get_cened_sheet(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    survey = _owned_survey(db, survey_id, current_user)
+    return cened_sheet_for(db, _owned_survey(db, survey_id, current_user))
+
+
+def cened_sheet_for(db: Session, survey: Survey) -> CenedSheet:
+    """Scheda CENED del sopralluogo, con l'elenco dei documenti caricati."""
     rows = (
         db.query(SurveyDocument, User)
         .outerjoin(User, User.id == SurveyDocument.uploaded_by)
@@ -50,7 +61,7 @@ async def get_cened_sheet(
 @router.get("/surveys/{survey_id}/cened-xml")
 async def get_cened_xml(
     survey_id: UUID,
-    format: Literal["2.0", "1.2"] = Query("2.0", description="2.0 = calcolo.xml, 1.2 = CENED+ 1.2"),
+    format: CenedFormat = FORMAT_QUERY,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -59,7 +70,11 @@ async def get_cened_xml(
     CENED importa solo archivi .zip: «File → Importa file XML 1.2» (format=1.2)
     o «File → Importa file XML» (format=2.0) estraggono l'unico XML contenuto.
     """
-    survey = _owned_survey(db, survey_id, current_user)
+    return cened_xml_response(_owned_survey(db, survey_id, current_user), format)
+
+
+def cened_xml_response(survey: Survey, format: CenedFormat) -> Response:
+    """Lo .zip con l'XML CENED del sopralluogo (unico file dentro l'archivio)."""
     build = build_calcolo_xml_20 if format == "2.0" else build_cened_xml_12
     xml = build(survey)
     logger.info("cened-xml %s survey=%s defaults=%d missing=%d",

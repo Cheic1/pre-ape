@@ -27,7 +27,7 @@ Future<CenedSheet?> loadCenedSheet(BuildContext context, WidgetRef ref,
   }
   final id = ref.read(surveyProvider).data.surveyId;
   if (id == null) return null;
-  return ref.read(apiClientProvider).getCenedSheet(id);
+  return ref.read(surveySaveApiProvider).getCenedSheet(id);
 }
 
 class CenedSheetCard extends ConsumerStatefulWidget {
@@ -90,7 +90,7 @@ class _CenedSheetCardState extends ConsumerState<CenedSheetCard> {
       }
       final id = ref.read(surveyProvider).data.surveyId!;
       final file =
-          await ref.read(apiClientProvider).downloadCenedXml(id, format);
+          await ref.read(surveySaveApiProvider).downloadCenedXml(id, format);
       downloadBytesFile(file.filename, file.bytes, 'application/zip');
       messenger.showSnackBar(SnackBar(
         content: Text('File CENED scaricato: ${file.filename}'),
