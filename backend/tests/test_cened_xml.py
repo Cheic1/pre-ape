@@ -238,6 +238,7 @@ class TestCened12:
         assert root.findtext("provincia") == "MI"
         assert root.findtext("comune") == "Milano"
         assert (root.findtext("foglio"), root.findtext("particella")) == ("123", "45")
+        assert (root.findtext("indirizzo"), root.findtext("ncivico")) == ("Via Roma", "1")
         assert root.findtext("software/nome") == "Pre-APE"
         assert "stima preliminare" in root.findtext("note_specifiche")
         subs = root.findall("ace/subalterni/dati_subalterno")
@@ -251,6 +252,14 @@ class TestCened12:
         assert root.findtext("ace/pannelli_solari/dati_pannello_solare/potenza_di_picco") == "3.5"
         assert root.find("ace/risultati/classe").text is None  # nessun risultato inventato
         assert "stima preliminare" in _comment(xml.content)
+
+    def test_osm_address_split(self):
+        osm = "8, Via Pietro Spino, Carnovali, Bergamo, Lombardia, 24126, Italia"
+        survey = _survey(address=osm, square_meters=95.0, building=FULL_BUILDING)
+        root = _parse(build_cened_xml_12(survey).content)
+        assert (root.findtext("indirizzo"), root.findtext("ncivico")) == ("Via Pietro Spino", "8")
+        edificio = _parse(build_calcolo_xml_20(survey).content)
+        assert edificio.find(".//{*}datiEdificio").get("indirizzo") == "Via Pietro Spino 8"
 
     @pytest.mark.parametrize("make", [_empty_survey, _full_survey])
     def test_valid_against_dtd(self, dtd, make):
@@ -282,10 +291,13 @@ class TestCenedXmlEndpoint:
                                   building=FULL_BUILDING, cadastral=[UNIT_FLAT])
         response = client.get(_url(survey_id, fmt), headers=headers)
         assert response.status_code == 200, response.text
-        assert response.headers["content-type"].startswith("application/xml")
-        expected = f'attachment; filename="preape_{uuid.UUID(survey_id).hex[:8]}_{suffix}.xml"'
-        assert response.headers["content-disposition"] == expected
-        assert ET.fromstring(response.content).tag == root_tag
+        assert response.headers["content-type"] == "application/zip"
+        stem = f"preape_{uuid.UUID(survey_id).hex[:8]}_{suffix}"
+        assert response.headers["content-disposition"] == f'attachment; filename="{stem}.zip"'
+        # CENED importa solo .zip ed estrae l'unico XML contenuto
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            assert archive.namelist() == [f"{stem}.xml"]
+            assert ET.fromstring(archive.read(f"{stem}.xml")).tag == root_tag
 
     def test_other_user_404(self, client, auth_a, auth_b):
         survey_id = create_survey(client, auth_a[0])

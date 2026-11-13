@@ -77,7 +77,7 @@ class _CenedSheetCardState extends ConsumerState<CenedSheetCard> {
     }
   }
 
-  /// Scarica il file XML CENED ([format] `2.0` | `1.2`) dei dati salvati.
+  /// Scarica lo .zip con l'XML CENED ([format] `2.0` | `1.2`) dei dati salvati.
   Future<void> _downloadXml(String format) async {
     if (_xmlBusy) return;
     setState(() => _xmlBusy = true);
@@ -91,9 +91,9 @@ class _CenedSheetCardState extends ConsumerState<CenedSheetCard> {
       final id = ref.read(surveyProvider).data.surveyId!;
       final file =
           await ref.read(apiClientProvider).downloadCenedXml(id, format);
-      downloadBytesFile(file.filename, file.bytes, 'application/xml');
+      downloadBytesFile(file.filename, file.bytes, 'application/zip');
       messenger.showSnackBar(SnackBar(
-        content: Text('File XML scaricato: ${file.filename}'),
+        content: Text('File CENED scaricato: ${file.filename}'),
         backgroundColor: AppColors.primaryDark,
       ));
     } on UnauthorizedException {
@@ -180,8 +180,9 @@ class _CenedSheetCardState extends ConsumerState<CenedSheetCard> {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'File di prova per l\'importazione in CENED+2.0 (File → Importa '
-            'file XML). Il calcolo dell\'APE resta a carico di CENED.',
+            'File .zip da importare in CENED+2.0: il formato 1.2 con File → '
+            'Importa file XML 1.2, il 2.0 con File → Importa file XML. Il '
+            'calcolo dell\'APE resta a carico di CENED.',
             style: AppTextStyles.bodySmall,
           ),
         ],

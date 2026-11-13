@@ -39,21 +39,21 @@ class ApiException implements Exception {
 
 /// 401 – token assente/invalido/scaduto.
 class UnauthorizedException extends ApiException {
-  UnauthorizedException(String message, {Object? detail})
-      : super(401, message, detail: detail);
+  UnauthorizedException(String message, {super.detail})
+      : super(401, message);
 }
 
 /// 404 – survey inesistente **oppure** non posseduto dall'utente (nessun
 /// oracolo di esistenza: il contratto risponde uguale nei due casi).
 class NotFoundException extends ApiException {
-  NotFoundException(String message, {Object? detail})
-      : super(404, message, detail: detail);
+  NotFoundException(String message, {super.detail})
+      : super(404, message);
 }
 
 /// 422 – validazione: `detail` contiene `loc`/`msg`/`type` per campo.
 class ValidationException extends ApiException {
-  ValidationException(String message, {Object? detail})
-      : super(422, message, detail: detail);
+  ValidationException(String message, {super.detail})
+      : super(422, message);
 }
 
 /// Nessuna risposta entro [ApiClient.timeout].
@@ -270,9 +270,9 @@ class ApiClient {
       (await _requestRaw('$_apiPrefix/documents/$documentId/content'))
           .bodyBytes;
 
-  /// `GET /api/v1/surveys/{id}/cened-xml?format=2.0|1.2` → file XML di prova
-  /// per l'importazione in CENED+2.0. Il nome arriva da `Content-Disposition`
-  /// (fallback `cened_<id>_<format>.xml`).
+  /// `GET /api/v1/surveys/{id}/cened-xml?format=2.0|1.2` → .zip con l'XML di
+  /// prova, pronto per l'importazione in CENED+2.0. Il nome arriva da
+  /// `Content-Disposition` (fallback `cened_<id>_<format>.zip`).
   Future<({Uint8List bytes, String filename})> downloadCenedXml(
       String surveyId, String format) async {
     final f = Uri.encodeQueryComponent(format);
@@ -282,7 +282,7 @@ class ApiClient {
       bytes: response.bodyBytes,
       filename: filenameFromContentDisposition(
               response.headers['content-disposition']) ??
-          'cened_${surveyId}_$format.xml',
+          'cened_${surveyId}_$format.zip',
     );
   }
 

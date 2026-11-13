@@ -1,15 +1,16 @@
 """File XML del sopralluogo da *provare* a importare in CENED+2.0.
 
-CENED+2.0 (Regione Lombardia) importa da «File → Importa file XML» due formati:
+CENED+2.0 (Regione Lombardia) importa due formati, sempre dentro uno .zip con il
+solo file XML (l'endpoint ``/cened-xml`` lo impacchetta):
 
-* ``build_calcolo_xml_20`` – ``calcolo.xml`` nel formato 2.0 (``calcolo.xsd`` /
-  ``datiCalcolo.xsd``). Contiene solo ``datiInput``: niente ``valoriIntermedi``,
+* ``build_calcolo_xml_20`` – menu «File → Importa file XML»: ``calcolo.xml``
+  nel formato 2.0 (``calcolo.xsd`` / ``datiCalcolo.xsd``). Contiene solo ``datiInput``: niente ``valoriIntermedi``,
   ``datiOutput``, ``hash``, ``hashImport`` né ``licenza`` (sono prodotti dal
   motore CENED e firmati: non li falsifichiamo). Per questo CENED+2.0 lo
   rifiuta in ``CenedImportXML.verificaValidita``; serve comunque come dato
   strutturato e validabile contro lo schema.
-* ``build_cened_xml_12`` – file ``dati`` nel vecchio formato CENED+ 1.2 (DTD
-  ``cened_Versione-1-0-5.dtd`` pubblicato dalla Regione). CENED+2.0 lo converte
+* ``build_cened_xml_12`` – menu «File → Importa file XML 1.2»: file ``dati``
+  nel vecchio formato CENED+ 1.2 (DTD ``cened_Versione-1-0-5.dtd`` pubblicato dalla Regione). CENED+2.0 lo converte
   e lo firma col proprio motore (``Trasforma12In20Service``) prima della stessa
   verifica: in una prova locale col motore 1.1.15 il file di un sopralluogo
   completo è stato convertito e ha superato ``verificaValidita``. Serve almeno il
@@ -43,6 +44,7 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.catasto import CadastralUnit
+from app.core.cened.address import split_address, street_line
 from app.core.cened.sheet import _parse_building, _parse_units
 from app.core.energy import climate
 from app.core.energy.engine import Resolved, resolve_inputs
@@ -294,7 +296,7 @@ def build_calcolo_xml_20(survey) -> CenedXml:
         sezioneUrbana=first.sezione_urbana,
         foglio=first.foglio or "ND", particella=first.particella or "ND",
         numeroSopralluoghi=1, piano=first.piano,
-        indirizzo=first.indirizzo or x.address,
+        indirizzo=street_line(first.indirizzo or x.address),
         destinazioneResidenziale=True, destinazioneNonResidenziale=False,
     )
     if not first.foglio or not first.particella:
@@ -618,13 +620,14 @@ def build_cened_xml_12(survey) -> CenedXml:
         ("interventi_migliorativi", []),
     ])
     sigla = x.comune.provincia if x.comune else (first.provincia or "")
+    via, civico = split_address(first.indirizzo or x.address)
     dati = ("dati", [
         ("software", [("nome", SOFTWARE_NAME), ("versione", "1.0"), ("cod_posizione", "")]),
         *_empty("cod_certificatore", "rif_procedura", "protocollo"),
         ("provincia", sigla),
         ("comune", x.comune.nome if x.comune else (first.comune or "")),
         ("codice_istat", x.istat or ""),
-        ("indirizzo", first.indirizzo or x.address or ""), ("ncivico", ""),
+        ("indirizzo", via), ("ncivico", civico),
         ("sezione_amministrativa", ""), ("sezione_urbana", first.sezione_urbana or ""),
         ("foglio", first.foglio or ""), ("particella", first.particella or ""),
         ("proprietario", _empty("nome", "cognome", "ragione_sociale")),

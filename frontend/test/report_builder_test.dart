@@ -56,6 +56,19 @@ final _result = EnergyResult.fromJson({
 int _imgCount(String html) => html.split('<img').length - 1;
 
 void main() {
+  test('no coordinates row when the location was never set', () {
+    final html = buildReportHtml(_survey(result: _result));
+    expect(html, isNot(contains('Coordinate')));
+    expect(html, isNot(contains('41.90280')));
+  });
+
+  test('coordinates row when the location is set', () {
+    final data = _survey(result: _result)
+      ..latitude = 45.69
+      ..longitude = 9.67;
+    expect(buildReportHtml(data), contains('45.69000, 9.67000'));
+  });
+
   group('M4/M3/M5 – report', () {
     test('0 foto aggiuntive: sezione presente, nessun <img>', () {
       final html = buildReportHtml(_survey());

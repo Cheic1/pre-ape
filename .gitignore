@@ -51,3 +51,4 @@ Pods/
 # Claude Code local state (worktrees)
 .claude/worktrees/
 backups/
+backend/.e2e_static/

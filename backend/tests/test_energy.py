@@ -138,6 +138,9 @@ class TestPhysics:
         assert [i["riduzione_ep_pct"] for i in singles] == sorted(
             (i["riduzione_ep_pct"] for i in singles), reverse=True)
         assert all(i["riduzione_ep_pct"] > 0 and i["investimento_eur"] > 0 for i in items)
+        # etichetta leggibile, niente codici interni come «pompa_calore»
+        assert "_" not in items[-1]["intervento"]
+        assert items[-1]["intervento"].startswith("Riqualificazione completa (")
         assert items[-1]["classi_guadagnate"] >= max(i["classi_guadagnate"] for i in singles)
 
     def test_legacy_flat_columns_still_count(self):

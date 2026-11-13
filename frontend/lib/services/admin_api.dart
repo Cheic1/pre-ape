@@ -18,8 +18,8 @@ import 'api_client.dart';
 
 /// 403 – l'utente non è (più) amministratore.
 class ForbiddenException extends ApiException {
-  ForbiddenException(String message, {Object? detail})
-      : super(403, message, detail: detail);
+  ForbiddenException(String message, {super.detail})
+      : super(403, message);
 }
 
 /// Bytes + metadati di un documento scaricato.

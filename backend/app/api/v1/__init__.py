@@ -57,8 +57,9 @@ Endpoints (path ids are UUIDs -> 422 when malformed, per-field validation)
   POST   /api/v1/photo-analyses              -> 201 | 404 (target survey must be owned)
   GET    /api/v1/surveys/{id}/cened-sheet    -> 200 CenedSheet | 404 (app.api.v1.cened)
   GET    /api/v1/surveys/{id}/cened-xml?format=2.0|1.2
-                                             -> 200 application/xml (attachment
-                                                preape_<id8>_cened20.xml / _cened12.xml)
+                                             -> 200 application/zip (attachment
+                                                preape_<id8>_cened20.zip / _cened12.zip,
+                                                one XML entry with the same stem)
                                                 | 404 | 422 other formats
 
 Scheda CENED (app.core.cened.sheet): survey data ordered like the CENED+2.0
@@ -71,7 +72,9 @@ screens, for copying into the software (no importable XML).
   derived suggestion; "da_rilevare" = missing (value null).
 
 XML CENED (app.core.cened.xml_export): the survey as a file to *try* in
-CENED+2.0 "File -> Importa file XML". format=2.0 -> calcolo.xml with datiInput
+CENED+2.0, served zipped because CENED only imports .zip archives:
+format=1.2 -> "File -> Importa file XML 1.2", format=2.0 -> "File -> Importa
+file XML". format=2.0 -> calcolo.xml with datiInput
 only (valid against calcolo.xsd; no valoriIntermedi/datiOutput/hash/licenza,
 which only the CENED engine produces, so CENED's verificaValidita rejects it);
 format=1.2 -> legacy CENED+ 1.2 "dati" file (DTD 1.0.5) that CENED converts and
