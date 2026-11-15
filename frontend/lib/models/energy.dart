@@ -71,6 +71,11 @@ class Improvement {
     required this.investimentoEur,
     required this.classiGuadagnate,
     this.tempoRitornoAnni,
+    this.incentivoEur = 0,
+    this.incentivoTipo,
+    this.investimentoNettoEur,
+    this.tempoRitornoNettoAnni,
+    this.flussoCassaCumulato = const [],
   });
 
   factory Improvement.fromJson(Map<String, dynamic> j) => Improvement(
@@ -83,6 +88,13 @@ class Improvement {
         investimentoEur: _i(j['investimento_eur']),
         classiGuadagnate: _i(j['classi_guadagnate']),
         tempoRitornoAnni: (j['tempo_ritorno_anni'] as num?)?.toDouble(),
+        incentivoEur: _i(j['incentivo_eur']),
+        incentivoTipo: j['incentivo_tipo'] as String?,
+        investimentoNettoEur: (j['investimento_netto_eur'] as num?)?.round(),
+        tempoRitornoNettoAnni: (j['tempo_ritorno_netto_anni'] as num?)?.toDouble(),
+        flussoCassaCumulato: [
+          for (final v in (j['flusso_cassa_cumulato'] as List? ?? const [])) (v as num).round(),
+        ],
       );
 
   final String codice;
@@ -94,6 +106,19 @@ class Improvement {
   final int investimentoEur;
   final int classiGuadagnate;
   final double? tempoRitornoAnni;
+
+  /// Detrazione stimata (0 se l'intervento non è agevolato o il motore è vecchio).
+  final int incentivoEur;
+  final String? incentivoTipo;
+  final int? investimentoNettoEur;
+
+  /// Rientro considerando risparmio + rate della detrazione (anni).
+  final double? tempoRitornoNettoAnni;
+
+  /// Saldo cumulato in € dall'anno 0 (−investimento) all'anno 15.
+  final List<int> flussoCassaCumulato;
+
+  bool get hasIncentive => incentivoEur > 0;
 
   bool get isGlobal => codice == 'riqualificazione_globale';
 }
@@ -166,6 +191,8 @@ class EnergyResult {
 
   List<Consumption> get consumi =>
       _l(raw['consumi']).map(Consumption.fromJson).toList(growable: false);
+  String? get noteIncentivi => raw['note_incentivi'] as String?;
+
   List<Improvement> get interventi =>
       _l(raw['interventi']).map(Improvement.fromJson).toList(growable: false);
   List<Assumption> get assunzioni =>

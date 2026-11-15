@@ -625,6 +625,22 @@ class _ImprovementTile extends StatelessWidget {
                   if (payback != null)
                     Text('rientro ~${_num(payback)} anni', style: AppTextStyles.bodySmall),
                 ]),
+                if (item.hasIncentive) ...[
+                  const SizedBox(height: 2),
+                  Wrap(spacing: AppSpacing.md, runSpacing: 2, children: [
+                    Text('incentivo ~${_eur(item.incentivoEur)}',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
+                    if (item.investimentoNettoEur != null)
+                      Text('netto ~${_eur(item.investimentoNettoEur!)}',
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
+                    Text(
+                        item.tempoRitornoNettoAnni == null
+                            ? 'rientro con incentivo oltre 15 anni'
+                            : 'rientro con incentivo ~${_num(item.tempoRitornoNettoAnni!)} anni',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                  ]),
+                ],
               ],
             ),
           ),

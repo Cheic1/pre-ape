@@ -53,6 +53,7 @@ class BuildingInputs(BaseModel):
     numero_piani: Optional[int] = Field(default=None, ge=1, le=6)
     lati_esposti: Optional[int] = Field(default=None, ge=1, le=4)
     orientamento: Optional[Orientamento] = None
+    abitazione_principale: Optional[bool] = None  # aliquota degli incentivi
 
     # Involucro
     muratura: Optional[Muratura] = None

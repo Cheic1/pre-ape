@@ -29,7 +29,7 @@ from typing import Dict, List, Optional, Tuple
 from . import climate
 from .inputs import BuildingInputs
 
-ENGINE_VERSION = "2026.10-1"
+ENGINE_VERSION = "2026.11-1"
 
 ENERGY_CLASS_LETTERS = ["A4", "A3", "A2", "A1", "B", "C", "D", "E", "F", "G"]
 # Upper bound of EPgl,nren / EPgl,nren,rif,standard for each class (best → worst).
@@ -124,6 +124,16 @@ GENERATOR_LABEL = {
 # Valori degli interventi (costi indicativi IVA inclusa)
 COST_WALL_M2, COST_ROOF_M2, COST_FLOOR_M2, COST_WINDOW_M2 = 130.0, 110.0, 50.0, 650.0
 COST_PV_KWP, COST_SOLAR_THERMAL, COST_CONDENSING = 1700.0, 4000.0, 3500.0
+
+# --- Incentivi (valori indicativi 2026, da verificare caso per caso)
+# Detrazione IRPEF «Ecobonus/Bonus casa» recuperata in 10 rate annuali uguali:
+# 50% per l'abitazione principale, 36% per le altre unità. Dal 2025 le caldaie
+# alimentate solo a combustibili fossili non sono più agevolate.
+INCENTIVE_YEARS = 10
+INCENTIVE_RATE_MAIN, INCENTIVE_RATE_OTHER = 0.50, 0.36
+INCENTIVE_EXCLUDED = {"condensazione"}
+INCENTIVE_LABEL = "Detrazione fiscale in 10 anni (Ecobonus/Bonus casa)"
+CASHFLOW_YEARS = 15
 
 # Legacy values written by the first MVP wizard (flat survey columns).
 _LEGACY_HEATING = {
@@ -774,7 +784,37 @@ _SHORT_LABEL = {
 }
 
 
-def _improvements(r: Resolved, base: dict) -> List[dict]:
+def _economics(invest: float, incentive: float, saving_eur: float) -> dict:
+    """Costo netto, rientro con incentivo e flusso di cassa cumulato (anni 0…15).
+
+    L'incentivo è una detrazione restituita in ``INCENTIVE_YEARS`` rate uguali,
+    quindi il rientro netto si calcola anno per anno, non come costo/risparmio.
+    Prezzi dell'energia costanti, nessuna attualizzazione.
+    """
+    rate = incentive / INCENTIVE_YEARS
+    flow = [-invest]
+    payback = None
+    for year in range(1, CASHFLOW_YEARS + 1):
+        prev = flow[-1]
+        gain = saving_eur + (rate if year <= INCENTIVE_YEARS else 0.0)
+        flow.append(prev + gain)
+        if payback is None and flow[-1] >= 0 and gain > 0:
+            payback = round(year - 1 + (-prev / gain), 1)
+    return {
+        "incentivo_eur": int(round(incentive, -1)),
+        "incentivo_tipo": INCENTIVE_LABEL if incentive > 0 else None,
+        "investimento_netto_eur": int(round(invest - incentive, -2)),
+        "tempo_ritorno_netto_anni": payback if saving_eur > 50 else None,
+        "flusso_cassa_cumulato": [round(v) for v in flow],
+    }
+
+
+def _incentive(code: str, invest: float, rate: float) -> float:
+    return 0.0 if code in INCENTIVE_EXCLUDED else invest * rate
+
+
+def _improvements(r: Resolved, base: dict, *, abitazione_principale: bool = True) -> List[dict]:
+    rate = INCENTIVE_RATE_MAIN if abitazione_principale else INCENTIVE_RATE_OTHER
     geo: Geometry = base["geo"]
     env: Envelope = base["env"]
     zone = r.zone
@@ -827,6 +867,8 @@ def _improvements(r: Resolved, base: dict) -> List[dict]:
         if saving_ep <= 0.5:
             continue
         saving_eur = base_cost - res["cost"]
+        invest = int(round(invest, -2))
+        incentive = _incentive(key, invest, rate)
         out.append({
             "codice": key,
             "intervento": label,
@@ -834,8 +876,9 @@ def _improvements(r: Resolved, base: dict) -> List[dict]:
             "ep_gl_nren": res["ep"]["gl_nren"],
             "riduzione_ep_pct": round(100 * saving_ep / base_ep, 1) if base_ep else 0.0,
             "risparmio_annuo_eur": round(saving_eur),
-            "investimento_eur": round(invest, -2),
+            "investimento_eur": invest,
             "tempo_ritorno_anni": round(invest / saving_eur, 1) if saving_eur > 50 else None,
+            **_economics(invest, incentive, saving_eur),
             "_variant": variant,
         })
     out.sort(key=lambda x: -x["riduzione_ep_pct"])
@@ -843,7 +886,7 @@ def _improvements(r: Resolved, base: dict) -> List[dict]:
     # Scenario combinato: involucro + impianto migliore + rinnovabili
     if len(out) >= 2:
         combo = r
-        invest = 0.0
+        invest = incentive = 0.0
         chosen = []
         has_hp = any(o["codice"] == "pompa_calore" for o in out)
         for o in out:
@@ -852,6 +895,7 @@ def _improvements(r: Resolved, base: dict) -> List[dict]:
             v = o["_variant"]
             combo = _merge(combo, v, r)
             invest += o["investimento_eur"]
+            incentive += o["incentivo_eur"]
             chosen.append(_SHORT_LABEL.get(o["codice"], o["codice"].replace("_", " ")))
         res = _evaluate(combo)
         saving_ep = base_ep - res["ep"]["gl_nren"]
@@ -863,8 +907,9 @@ def _improvements(r: Resolved, base: dict) -> List[dict]:
             "ep_gl_nren": res["ep"]["gl_nren"],
             "riduzione_ep_pct": round(100 * saving_ep / base_ep, 1) if base_ep else 0.0,
             "risparmio_annuo_eur": round(saving_eur),
-            "investimento_eur": round(invest, -2),
+            "investimento_eur": int(round(invest, -2)),
             "tempo_ritorno_anni": round(invest / saving_eur, 1) if saving_eur > 50 else None,
+            **_economics(invest, incentive, saving_eur),
             "classi_guadagnate": _class_gain(base["energy_class"], res["energy_class"]),
         })
     for o in out:
@@ -931,5 +976,16 @@ def compute(
         "assunzioni": r.assunzioni,
         "note": base["notes"],
     }
-    result["interventi"] = _improvements(r, base) if with_improvements else []
+    principale = building.abitazione_principale if building else None
+    result["interventi"] = (
+        _improvements(r, base, abitazione_principale=principale is not False)
+        if with_improvements else [])
+    if with_improvements and result["interventi"]:
+        pct = round(100 * (INCENTIVE_RATE_OTHER if principale is False else INCENTIVE_RATE_MAIN))
+        result["note_incentivi"] = (
+            f"Incentivi stimati come detrazione del {pct}% in {INCENTIVE_YEARS} anni "
+            + ("(abitazione principale" + (", ipotesi non confermata dal sopralluogo)" if principale is None else ")")
+               if principale is not False else "(unità diversa dall'abitazione principale)")
+            + ". Valori indicativi: aliquote, massimali e alternative come il Conto Termico "
+              "vanno verificati con un tecnico abilitato.")
     return result

@@ -5,6 +5,9 @@ La versione è la stessa per app (`frontend/pubspec.yaml`) e backend (`backend/p
 
 ## [Non rilasciato]
 
+### Aggiunto
+- Interventi migliorativi: per ogni intervento la stima mostra ora l'incentivo (detrazione 50% abitazione principale / 36% altre unità, in 10 anni; caldaie a sola fonte fossile escluse), il costo netto, il rientro con incentivo e il flusso di cassa cumulato su 15 anni. Nuovo campo facoltativo `abitazione_principale` nei dati edificio (se manca si assume abitazione principale e lo si dichiara). Valori indicativi, da verificare.
+
 ### Corretto
 - Pannello amministratore: aprendo il sopralluogo di un altro utente (es. un geometra), la scheda CENED e lo .zip CENED davano «non disponibile (404)». Ora arrivano da `/admin/surveys/{id}/cened-sheet` e `/admin/surveys/{id}/cened-xml`, con la riga nel registro accessi.
 

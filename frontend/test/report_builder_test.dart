@@ -46,8 +46,12 @@ final _result = EnergyResult.fromJson({
   'interventi': [
     {'codice': 'cappotto', 'intervento': 'Cappotto <12 cm>', 'classe': 'C',
      'riduzione_ep_pct': 40.0, 'risparmio_annuo_eur': 450, 'investimento_eur': 6500,
-     'tempo_ritorno_anni': 14.4, 'classi_guadagnate': 2},
+     'tempo_ritorno_anni': 14.4, 'classi_guadagnate': 2,
+     'incentivo_eur': 3250, 'investimento_netto_eur': 3300, 'tempo_ritorno_netto_anni': 8.6,
+     'incentivo_tipo': 'Detrazione fiscale in 10 anni (Ecobonus/Bonus casa)',
+     'flusso_cassa_cumulato': [-6500, -5725]},
   ],
+  'note_incentivi': 'Incentivi stimati come detrazione del 50% in 10 anni.',
   'assunzioni': [
     {'campo': 'anno_costruzione', 'descrizione': 'Anno di costruzione', 'valore': 1970},
   ],
@@ -132,6 +136,10 @@ void main() {
       expect(html, contains('Milano (MI)'));
       expect(html, contains('€ 1.152'));
       expect(html, contains('Cappotto &lt;12 cm&gt;'));
+      expect(html, contains('Rientro con incentivo'));
+      expect(html, contains('€ 3.250'));
+      expect(html, contains('8,6 anni'));
+      expect(html, contains('detrazione del 50%'));
       expect(html, contains('Dati non rilevati'));
       expect(html, contains('Anno di costruzione'));
     });

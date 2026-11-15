@@ -143,6 +143,43 @@ class TestPhysics:
         assert items[-1]["intervento"].startswith("Riqualificazione completa (")
         assert items[-1]["classi_guadagnate"] >= max(i["classi_guadagnate"] for i in singles)
 
+    def test_improvements_incentives_and_net_payback(self):
+        r = compute(BuildingInputs(**{**OLD_FLAT, "piano": "ultimo"}), square_meters=80)
+        items = r["interventi"]
+        assert "50%" in r["note_incentivi"] and "non confermata" in r["note_incentivi"]
+        for i in items:
+            flow = i["flusso_cassa_cumulato"]
+            assert len(flow) == engine.CASHFLOW_YEARS + 1 and flow[0] == -i["investimento_eur"]
+            assert i["investimento_netto_eur"] == round(i["investimento_eur"] - i["incentivo_eur"], -2)
+            if i["incentivo_eur"] > 0 and i["tempo_ritorno_netto_anni"] is not None:
+                assert i["tempo_ritorno_netto_anni"] < i["tempo_ritorno_anni"]
+                assert i["incentivo_tipo"]
+        cond = [i for i in items if i["codice"] == "condensazione"]
+        assert all(i["incentivo_eur"] == 0 for i in cond)
+        glob = items[-1]
+        assert glob["incentivo_eur"] == pytest.approx(
+            sum(i["incentivo_eur"] for i in items[:-1]
+                if not (i["codice"] in ("condensazione", "valvole")
+                        and any(o["codice"] == "pompa_calore" for o in items))), abs=20)
+
+    def test_incentive_rate_for_second_home(self):
+        main = compute(BuildingInputs(**{**OLD_FLAT, "abitazione_principale": True}), square_meters=80)
+        other = compute(BuildingInputs(**{**OLD_FLAT, "abitazione_principale": False}), square_meters=80)
+        a = {i["codice"]: i for i in main["interventi"]}
+        b = {i["codice"]: i for i in other["interventi"]}
+        key = next(k for k in a if a[k]["incentivo_eur"] > 0)
+        assert a[key]["incentivo_eur"] == pytest.approx(a[key]["investimento_eur"] * 0.5, abs=10)
+        assert b[key]["incentivo_eur"] == pytest.approx(b[key]["investimento_eur"] * 0.36, abs=10)
+        assert "36%" in other["note_incentivi"]
+
+    def test_economics_payback_math(self):
+        e = engine._economics(10000, 5000, 1000)
+        # ogni anno 1000 di risparmio + 500 di detrazione: rientro in 6,7 anni
+        assert e["tempo_ritorno_netto_anni"] == pytest.approx(6.7)
+        assert e["flusso_cassa_cumulato"][10] == 5000
+        assert e["flusso_cassa_cumulato"][15] == 10000
+        assert engine._economics(10000, 0, 20)["tempo_ritorno_netto_anni"] is None
+
     def test_legacy_flat_columns_still_count(self):
         legacy = compute(BuildingInputs(), legacy={"heating_type": "Pompa di Calore"},
                          with_improvements=False)
