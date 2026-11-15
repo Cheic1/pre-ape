@@ -136,6 +136,37 @@ class TestPhotoValidation:
         )
         assert response.status_code == 413
 
+    def test_body_size_limit_chunked(self, client, auth_a):
+        """No Content-Length (chunked upload): the streamed bytes are counted."""
+        headers, _ = auth_a
+
+        def chunks():
+            for _ in range(17):
+                yield b"x" * (1024 * 1024)
+
+        response = client.post(
+            API,
+            content=chunks(),
+            headers={**headers, "Content-Type": "application/json"},
+        )
+        assert response.status_code == 413
+        assert response.json()["detail"] == "Request body too large"
+
+    def test_chunked_body_under_limit_still_works(self, client, auth_a):
+        headers, _ = auth_a
+
+        def chunks():
+            yield b'{"title": '
+            yield b'"chunked"}'
+
+        response = client.post(
+            API,
+            content=chunks(),
+            headers={**headers, "Content-Type": "application/json"},
+        )
+        assert response.status_code == 201
+        assert response.json()["title"] == "chunked"
+
 
 class TestDelete:
     def test_delete_survey_with_photo_analyses(self, client, auth_a):

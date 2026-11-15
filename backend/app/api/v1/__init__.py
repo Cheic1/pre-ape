@@ -152,7 +152,7 @@ from app.core.security import (
     create_access_token,
     decode_token,
     dummy_verify_async,
-    hash_password,
+    hash_password_async,
     verify_password_async,
 )
 from app.models.database import User, Survey, PhotoAnalysis
@@ -526,7 +526,7 @@ async def register(
         id=uuid.uuid4(),
         email=email,
         name=(payload.name or email.split("@", 1)[0])[:255],
-        password_hash=hash_password(payload.password),
+        password_hash=await hash_password_async(payload.password),
         terms_version=legal.LEGAL_VERSION,
         terms_accepted_at=datetime.utcnow(),
     )

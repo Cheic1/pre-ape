@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import text
@@ -79,12 +79,61 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def limit_body_size(request: Request, call_next):
-    length = request.headers.get("content-length")
-    if length is not None and length.isdigit() and int(length) > MAX_BODY_BYTES:
-        return JSONResponse({"detail": "Request body too large"}, status_code=413)
-    return await call_next(request)
+class _BodyTooLarge(HTTPException):
+    """Raised while the body streams in; FastAPI lets HTTPException through its
+    body parsing (any other error would become a 400)."""
+
+    def __init__(self):
+        super().__init__(status_code=413, detail="Request body too large")
+
+
+class LimitBodySizeMiddleware:
+    """413 for bodies over MAX_BODY_BYTES.
+
+    Checks Content-Length up front and also counts the streamed bytes, so a
+    chunked upload (no Content-Length) cannot slip past the limit.
+    """
+
+    def __init__(self, app, max_bytes: int):
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        too_large = JSONResponse({"detail": "Request body too large"}, status_code=413)
+        for name, value in scope.get("headers", []):
+            if name == b"content-length":
+                if value.isdigit() and int(value) > self.max_bytes:
+                    return await too_large(scope, receive, send)
+                break
+
+        received = 0
+        response_started = False
+
+        async def limited_receive():
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_bytes:
+                    raise _BodyTooLarge()
+            return message
+
+        async def tracking_send(message):
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, limited_receive, tracking_send)
+        except _BodyTooLarge:
+            if not response_started:
+                await too_large(scope, receive, send)
+
+
+app.add_middleware(LimitBodySizeMiddleware, max_bytes=MAX_BODY_BYTES)
 
 
 # Include API v1 router
@@ -100,7 +149,7 @@ async def api_info():
     })
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     return JSONResponse({
         "status": "healthy",
@@ -112,17 +161,18 @@ if (STATIC_DIR / "index.html").is_file():
     _index = STATIC_DIR / "index.html"
     _static_root = STATIC_DIR.resolve()
 
-    @app.get("/{full_path:path}", include_in_schema=False)
+    # HEAD too: uptime monitors and link checkers probe with it (was 405).
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     async def spa(full_path: str):
         """Serve the Flutter web build; unknown paths fall back to index.html."""
         if full_path.startswith(("api/", "docs", "redoc", "openapi.json")):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         candidate = (STATIC_DIR / full_path).resolve()
         if full_path and candidate.is_file() and _static_root in candidate.parents:
-            # index.html / service worker must not be cached across deploys
-            no_cache = candidate.name in ("index.html", "flutter_service_worker.js", "flutter_bootstrap.js")
-            headers = {"Cache-Control": "no-cache"} if no_cache else None
-            return FileResponse(candidate, headers=headers)
+            # Flutter web file names carry no content hash (main.dart.js,
+            # assets/…): without no-cache a browser may keep running the old
+            # bundle after a deploy. no-cache still allows 304 revalidation.
+            return FileResponse(candidate, headers={"Cache-Control": "no-cache"})
         return FileResponse(_index, headers={"Cache-Control": "no-cache"})
 else:
     @app.get("/")

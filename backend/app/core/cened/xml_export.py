@@ -209,6 +209,19 @@ ET.register_namespace("c", NS_CALCOLO)
 ET.register_namespace("d", NS_DATI)
 
 
+# Caratteri non ammessi in XML 1.0 (controllo C0 tranne tab/a capo, surrogati,
+# U+FFFE/U+FFFF). ElementTree li scrive senza protestare e il file diventa
+# illeggibile per CENED: capitano incollando testo da PDF (es. la visura).
+_XML_INVALID_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
+
+
+def _xml_text(value: Any) -> str:
+    text = str(value)
+    if _XML_INVALID_RE.search(text):
+        text = " ".join(_XML_INVALID_RE.sub(" ", text).split())
+    return text
+
+
 def _c(tag: str) -> str:
     return f"{{{NS_CALCOLO}}}{tag}"
 
@@ -226,7 +239,7 @@ def _sub(parent: ET.Element, tag: str, **attrs: Any) -> ET.Element:
             value = "true" if value else "false"
         elif isinstance(value, float):
             value = _num(value)
-        clean[key] = str(value)
+        clean[key] = _xml_text(value)
     return ET.SubElement(parent, _d(tag), clean)
 
 
@@ -398,7 +411,7 @@ def _build(parent: Optional[ET.Element], spec: Spec) -> ET.Element:
         for child in content:
             _build(el, child)
     elif content is not None:
-        el.text = str(content)
+        el.text = _xml_text(content)
     return el
 
 
