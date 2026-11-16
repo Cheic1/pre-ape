@@ -314,3 +314,16 @@ class TestCenedXmlEndpoint:
     def test_requires_auth(self, client, auth_a):
         survey_id = create_survey(client, auth_a[0])
         assert client.get(_url(survey_id)).status_code == 401
+
+
+@pytest.mark.parametrize("build", [build_calcolo_xml_20, build_cened_xml_12])
+def test_control_characters_do_not_break_the_xml(build):
+    """Testo incollato da un PDF (es. visura) può contenere caratteri di
+    controllo: l'XML deve restare leggibile, con il testo ripulito."""
+    unit = {**UNIT_FLAT, "indirizzo": "Via\x0cRoma\x01 1", "piano": "3\x00"}
+    survey = _survey(address="Via\x0bRoma\x02 1, Milano", square_meters=95.0, avg_height=2.7,
+                     building=FULL_BUILDING, cadastral=[unit])
+    content = build(survey).content
+    _parse(content)  # ParseError prima della correzione
+    assert b"\x0b" not in content and b"\x0c" not in content and b"\x00" not in content
+    assert "Via Roma" in content.decode("utf-8")

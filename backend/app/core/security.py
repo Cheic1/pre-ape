@@ -66,6 +66,11 @@ async def verify_password_async(password: str, stored: str) -> bool:
     return await asyncio.to_thread(verify_password, password, stored)
 
 
+async def hash_password_async(password: str) -> str:
+    """PBKDF2 hash off the event loop: registration costs as much as a login."""
+    return await asyncio.to_thread(hash_password, password)
+
+
 async def dummy_verify_async(password: str) -> bool:
     """Async variant of dummy_verify; always returns False (equal login cost)."""
     return await asyncio.to_thread(dummy_verify, password)

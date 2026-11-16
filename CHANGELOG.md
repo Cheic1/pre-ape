@@ -6,6 +6,13 @@ La versione è la stessa per app (`frontend/pubspec.yaml`) e backend (`backend/p
 ## [Non rilasciato]
 
 ### Corretto
+- Export CENED: un carattere di controllo nell'indirizzo o nei dati catastali (capita incollando testo da un PDF, es. la visura) rendeva l'XML illeggibile per CENED. Ora quei caratteri vengono tolti.
+- «Usa la mia posizione» su un sopralluogo già salvato non segnava la modifica come da salvare: uscendo non compariva l'avviso, e la scheda e lo .zip CENED partivano dai dati vecchi senza salvare prima.
+- Una modifica fatta mentre il salvataggio era in corso risultava salvata anche se non lo era.
+- Dopo un aggiornamento dell'app il browser poteva continuare a usare la versione vecchia: ora tutti i file dell'app vengono riverificati a ogni apertura.
+- Il limite di 16 MB sulle richieste valeva solo se il client dichiarava la dimensione: un invio "a pezzi" (chunked) veniva letto tutto in memoria.
+- La registrazione bloccava il server per il calcolo della password (come già corretto per il login).
+- Le richieste `HEAD` (usate dai monitor di uptime) sulle pagine dell'app e su `/health` rispondevano 405.
 - Pannello amministratore: aprendo il sopralluogo di un altro utente (es. un geometra), la scheda CENED e lo .zip CENED davano «non disponibile (404)». Ora arrivano da `/admin/surveys/{id}/cened-sheet` e `/admin/surveys/{id}/cened-xml`, con la riga nel registro accessi.
 
 ## [1.0.0] – 2026-11-04

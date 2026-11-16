@@ -1,6 +1,7 @@
 /// SaaS MVP: sessione persistente, lista/cancellazione, salvataggio wizard.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -207,6 +208,26 @@ void main() {
       expect(calls.last, 'PUT /api/v1/surveys/s-42');
       expect(lastBody!['status'], 'completed');
       expect(n.data.status, 'completed');
+    });
+
+    test('modifica durante il salvataggio: resta dirty', () async {
+      final gate = Completer<void>();
+      final api = ApiClient(
+        baseUrl: _base,
+        client: MockClient((req) async {
+          await gate.future;
+          return _json(_survey('s-7'), 201);
+        }),
+      );
+      final n = SurveyNotifier()..startNew();
+      n.updateTitle('prima');
+      final saving = n.save(api);
+      n.updateNotes('scritta mentre salva');
+      gate.complete();
+      await saving;
+      expect(n.data.surveyId, 's-7');
+      expect(n.dirty, isTrue, reason: 'la nota non è ancora sul server');
+      expect(n.data.notes, 'scritta mentre salva');
     });
 
     test('errore di rete: resta dirty e l\'eccezione arriva al chiamante', () async {

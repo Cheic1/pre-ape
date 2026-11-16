@@ -167,6 +167,9 @@ class SurveyNotifier extends ChangeNotifier {
   bool _locationFetched = false;
   bool _saving = false;
   bool _dirty = false;
+  // Bumped by every edit: a save only clears [dirty] if nothing changed
+  // while its request was in flight.
+  int _revision = 0;
   Timer? _estimateTimer;
   int _estimateSeq = 0;
   bool _disposed = false;
@@ -180,7 +183,10 @@ class SurveyNotifier extends ChangeNotifier {
   /// True when there are changes not yet saved to the server.
   bool get dirty => _dirty;
 
-  void _touch() => _dirty = true;
+  void _touch() {
+    _dirty = true;
+    _revision++;
+  }
 
   @override
   void notifyListeners() {
@@ -278,16 +284,20 @@ class SurveyNotifier extends ChangeNotifier {
     notifyListeners();
     try {
       final body = toWire(status: complete ? 'completed' : null);
+      final revision = _revision;
       final id = _data.surveyId;
       final saved = id == null
           ? await api.createSurvey(body)
           : await api.updateSurvey(id, body);
+      // Edits made during the request are not on the server yet: keep them
+      // dirty (and keep the live estimate, which already reflects them).
+      final unchanged = revision == _revision;
       _data = _data.copyWith(
         surveyId: saved.id,
         status: saved.status,
-        result: saved.energyResult,
+        result: unchanged ? saved.energyResult : null,
       );
-      _dirty = false;
+      if (unchanged) _dirty = false;
     } finally {
       _saving = false;
       notifyListeners();
@@ -577,6 +587,9 @@ class SurveyNotifier extends ChangeNotifier {
         latitude: pos.lat,
         longitude: pos.lng,
       );
+      // An explicit "Usa la mia posizione" changes a saved survey: mark it
+      // unsaved, or the exit prompt and the CENED export would miss it.
+      if (force) _touch();
       notifyListeners();
       _scheduleEstimate();
 
