@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pre-ape-backend"
-version = "1.0.0"
+version = "1.1.0"
 description = "Pre-APE Backend API"
 requires-python = ">=3.11"
 # Runtime: only what the API process imports (keeps the image small enough
@@ -19,6 +19,12 @@ dependencies = [
     "python-jose==3.3.0",
     "pypdf==4.3.1",
     "cryptography==43.0.3",
+    # Planimetria -> DXF/3D (app/core/planimetria): render PDF, visione, CAD
+    "numpy==1.26.4",
+    "opencv-python-headless==4.10.0.84",
+    "pillow==10.4.0",
+    "pypdfium2==4.30.0",
+    "ezdxf==1.4.5",
 ]
 
 [project.optional-dependencies]

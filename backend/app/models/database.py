@@ -132,6 +132,8 @@ class SurveyDocument(Base):
     content = Column(LargeBinary, nullable=False)
     # Proposta estratta dalla visura (lista di CadastralUnit) o null.
     extracted = Column(JSON)
+    # Geometria estratta dalla planimetria (app.core.planimetria.FloorPlan) o null.
+    cad = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     survey = relationship("Survey", back_populates="documents")

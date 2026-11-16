@@ -26,6 +26,7 @@ _ADDITIVE_MIGRATIONS = (
     "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS cadastral JSON",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version VARCHAR(32)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP",
+    "ALTER TABLE survey_documents ADD COLUMN IF NOT EXISTS cad JSON",
 )
 
 # Max request body: 14 photos × ~1 MB data-URL + JSON fields.
@@ -61,7 +62,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="Pre-APE API",
     description="API for Pre-APE - Preliminary Energy Performance Assessment",
-    version="1.0.0",
+    version="1.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -144,7 +145,7 @@ app.include_router(api_v1_router)
 async def api_info():
     return JSONResponse({
         "app": "Pre-APE API",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "status": "running",
     })
 
