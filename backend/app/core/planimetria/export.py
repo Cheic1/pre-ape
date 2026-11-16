@@ -12,9 +12,12 @@ Il 3D è fatto di mesh POLYFACE (le più compatibili fra i CAD):
 from __future__ import annotations
 
 import io
+import logging
 from typing import Dict, Iterable, List, Sequence, Tuple
 
 from app.core.planimetria import FloorPlan, Point
+
+logging.getLogger("ezdxf").setLevel(logging.WARNING)  # niente log INFO a ogni export
 
 DOOR_HEIGHT_M = 2.10
 SILL_HEIGHT_M = 0.90

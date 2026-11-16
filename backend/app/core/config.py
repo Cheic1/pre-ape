@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = Field(default="llava:7b")
     OPENAI_API_KEY: str = Field(default="")
     ANTHROPIC_API_KEY: str = Field(default="")
+    # Planimetria -> CAD: agente LLM con visione, API compatibile OpenAI
+    # (freellmapi, OpenAI, OpenRouter, Ollama...). Vuoto = disattivato.
+    LLM_BASE_URL: str = Field(default="", description="es. http://freellmapi:3001/v1")
+    LLM_API_KEY: str = Field(default="")
+    LLM_MODEL: str = Field(default="", description="modello con visione, non 'auto'")
+    LLM_TIMEOUT_S: float = Field(default=45.0)
     
     # Storage
     UPLOAD_DIR: str = Field(default="/tmp/pre_ape_uploads")

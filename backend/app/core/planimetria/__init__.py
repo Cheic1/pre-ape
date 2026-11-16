@@ -65,6 +65,8 @@ class CadParams(BaseModel):
     # precedenza su scala + dpi.
     meters_per_px: Optional[float] = Field(default=None, gt=0, le=1.0)
     page: int = Field(default=0, ge=0, le=49)
+    # Usa l'agente LLM (se configurato sul server) per scala, altezza e nomi.
+    use_ai: bool = True
 
 
 class FloorPlan(BaseModel):
@@ -100,10 +102,19 @@ def extract_floor_plan(data: bytes, mime: str, params: Optional[CadParams] = Non
     raster = load_raster(data, mime, page=params.page)
     warnings: List[str] = list(raster.warnings)
 
+    hints = None
+    if params.use_ai:
+        from app.core.planimetria.llm import safe_analyze
+
+        hints = safe_analyze(raster.gray, warnings)
+
     scale = params.scale_denominator or raster.scale_denominator
     if params.meters_per_px:
         mpp = params.meters_per_px
     else:
+        if scale is None and hints and hints.scale_denominator:
+            scale = hints.scale_denominator
+            warnings.append(f"Scala 1:{scale} letta dall'AI sul disegno, da verificare.")
         if scale is None:
             scale = DEFAULT_SCALE
             warnings.append(
@@ -116,9 +127,12 @@ def extract_floor_plan(data: bytes, mime: str, params: Optional[CadParams] = Non
         dpi = raster.dpi or 300.0
         mpp = (25.4 / dpi) / 1000.0 * scale
 
-    height = params.wall_height_m or DEFAULT_WALL_HEIGHT_M
+    height = params.wall_height_m or (hints.wall_height_m if hints else None) or DEFAULT_WALL_HEIGHT_M
     plan = extract_geometry(raster.gray, mpp, warnings)
+    if hints:
+        _label_rooms(plan, hints.rooms, mpp)
     return FloorPlan(
+        source="cv+llm" if hints else "cv",
         page=params.page,
         scale_denominator=None if params.meters_per_px else scale,
         meters_per_px=mpp,
@@ -128,3 +142,24 @@ def extract_floor_plan(data: bytes, mime: str, params: Optional[CadParams] = Non
         warnings=warnings,
         **plan,
     )
+
+
+def _inside(pt: Point, poly: List[Point]) -> bool:
+    x, y = pt
+    inside = False
+    for i in range(len(poly)):
+        (x1, y1), (x2, y2) = poly[i], poly[(i + 1) % len(poly)]
+        if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
+            inside = not inside
+    return inside
+
+
+def _label_rooms(plan: dict, names, mpp: float) -> None:
+    """Nomi letti dall'AI (pixel) → vano che contiene il punto (metri)."""
+    ox, oy = plan["origin_px"]
+    for name, x_px, y_px in names:
+        pt = ((x_px - ox) * mpp, (oy - y_px) * mpp)
+        for room in plan["rooms"]:
+            if not room.get("label") and _inside(pt, room["polygon"]):
+                room["label"] = name
+                break
