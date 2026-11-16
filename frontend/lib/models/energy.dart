@@ -199,3 +199,66 @@ class EnergyResult {
       _l(raw['assunzioni']).map(Assumption.fromJson).toList(growable: false);
   List<String> get note => (raw['note'] as List?)?.cast<String>() ?? const [];
 }
+
+
+/// Raccomandazione dell'agente consulente: testo dell'LLM, numeri del motore.
+class AdvisorRecommendation {
+  const AdvisorRecommendation({
+    required this.titolo,
+    required this.motivazione,
+    required this.classe,
+    required this.investimentoEur,
+    required this.incentivoEur,
+    required this.risparmioAnnuoEur,
+    this.investimentoNettoEur,
+    this.tempoRitornoAnni,
+    this.tempoRitornoNettoAnni,
+  });
+
+  factory AdvisorRecommendation.fromJson(Map<String, dynamic> j) => AdvisorRecommendation(
+        titolo: j['titolo'] as String? ?? '',
+        motivazione: j['motivazione'] as String? ?? '',
+        classe: j['classe'] as String? ?? '',
+        investimentoEur: _i(j['investimento_eur']),
+        incentivoEur: _i(j['incentivo_eur']),
+        risparmioAnnuoEur: _i(j['risparmio_annuo_eur']),
+        investimentoNettoEur: (j['investimento_netto_eur'] as num?)?.round(),
+        tempoRitornoAnni: (j['tempo_ritorno_anni'] as num?)?.toDouble(),
+        tempoRitornoNettoAnni: (j['tempo_ritorno_netto_anni'] as num?)?.toDouble(),
+      );
+
+  final String titolo;
+  final String motivazione;
+  final String classe;
+  final int investimentoEur;
+  final int incentivoEur;
+  final int risparmioAnnuoEur;
+  final int? investimentoNettoEur;
+  final double? tempoRitornoAnni;
+  final double? tempoRitornoNettoAnni;
+}
+
+/// Risposta di `POST /advisor`.
+class AdvisorResult {
+  const AdvisorResult({
+    required this.sintesi,
+    required this.raccomandazioni,
+    required this.avvertenze,
+    required this.nota,
+  });
+
+  factory AdvisorResult.fromJson(Map<String, dynamic> j) => AdvisorResult(
+        sintesi: j['sintesi'] as String? ?? '',
+        raccomandazioni: [
+          for (final r in (j['raccomandazioni'] as List? ?? const []))
+            if (r is Map<String, dynamic>) AdvisorRecommendation.fromJson(r),
+        ],
+        avvertenze: [for (final w in (j['avvertenze'] as List? ?? const [])) '$w'],
+        nota: j['nota'] as String? ?? '',
+      );
+
+  final String sintesi;
+  final List<AdvisorRecommendation> raccomandazioni;
+  final List<String> avvertenze;
+  final String nota;
+}

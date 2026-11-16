@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pre_ape/core/constants/app_colors.dart';
 import 'package:pre_ape/core/constants/app_spacing.dart';
 import 'package:pre_ape/core/constants/app_text_styles.dart';
+import 'package:pre_ape/features/auth/auth_provider.dart';
 import 'package:pre_ape/features/onboarding/cened_sheet_card.dart';
 import 'package:pre_ape/features/onboarding/report_builder.dart';
 import 'package:pre_ape/features/onboarding/survey_provider.dart';
@@ -71,6 +72,7 @@ class Step6Results extends ConsumerWidget {
           _EnvelopeCard(result: result),
           _ConsumptionCard(result: result),
           _ImprovementsCard(result: result),
+          const _AdvisorCard(),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
             child: Text(result.metodo, style: AppTextStyles.bodySmall),
@@ -588,6 +590,133 @@ class _ImprovementsCard extends StatelessWidget {
       child: items.isEmpty
           ? const Text('Nessun intervento con benefici significativi.', style: AppTextStyles.bodyMedium)
           : Column(children: [for (final i in items) _ImprovementTile(item: i, from: result.classe)]),
+    );
+  }
+}
+
+/// L'agente consulente è configurato sul server? (false su qualsiasi errore)
+final advisorEnabledProvider = FutureProvider.autoDispose<bool>(
+  (ref) => ref.watch(apiClientProvider).advisorEnabled(),
+);
+
+/// «Analisi consulente»: l'agente LLM sceglie e spiega gli interventi più
+/// convenienti; costi, incentivi e rientro arrivano dal motore di stima.
+/// Nascosta se il server non ha l'LLM configurato.
+class _AdvisorCard extends ConsumerStatefulWidget {
+  const _AdvisorCard();
+
+  @override
+  ConsumerState<_AdvisorCard> createState() => _AdvisorCardState();
+}
+
+class _AdvisorCardState extends ConsumerState<_AdvisorCard> {
+  bool _loading = false;
+  String? _error;
+  AdvisorResult? _result;
+
+  Future<void> _run() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final body = ref.read(surveyProvider).estimateBody();
+      final r = await ref.read(apiClientProvider).advisor(body);
+      if (mounted) setState(() => _result = r);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = ref.watch(advisorEnabledProvider).valueOrNull ?? false;
+    if (!enabled) return const SizedBox.shrink();
+    final r = _result;
+    return _Card(
+      title: 'Analisi consulente',
+      icon: Icons.auto_awesome,
+      trailing: TextButton(
+        key: const ValueKey('advisor_run'),
+        onPressed: _loading ? null : _run,
+        child: Text(r == null ? 'Analizza' : 'Rifai analisi'),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.md),
+              child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+            )
+          else if (_error != null)
+            Text(_error!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))
+          else if (r == null)
+            const Text(
+                'Un assistente AI valuta quali interventi convengono di più per questo '
+                'edificio e in quanti anni si rientra della spesa.',
+                style: AppTextStyles.bodySmall)
+          else ...[
+            if (r.sintesi.isNotEmpty) Text(r.sintesi, style: AppTextStyles.bodyMedium),
+            const SizedBox(height: AppSpacing.sm),
+            for (final (i, rec) in r.raccomandazioni.indexed) _AdvisorTile(index: i + 1, rec: rec),
+            for (final w in r.avvertenze)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text('• $w', style: AppTextStyles.bodySmall),
+              ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(r.nota, style: AppTextStyles.bodySmall),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AdvisorTile extends StatelessWidget {
+  const _AdvisorTile({required this.index, required this.rec});
+
+  final int index;
+  final AdvisorRecommendation rec;
+
+  @override
+  Widget build(BuildContext context) {
+    final payback = rec.tempoRitornoNettoAnni;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$index. ${rec.titolo}${rec.classe.isEmpty ? '' : ' → classe ${rec.classe}'}',
+              style: AppTextStyles.labelLarge),
+          if (rec.motivazione.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(rec.motivazione, style: AppTextStyles.bodySmall),
+          ],
+          const SizedBox(height: 4),
+          Wrap(spacing: AppSpacing.md, runSpacing: 2, children: [
+            Text('costo ~${_eur(rec.investimentoEur)}', style: AppTextStyles.bodySmall),
+            if (rec.incentivoEur > 0)
+              Text('incentivo ~${_eur(rec.incentivoEur)}', style: AppTextStyles.bodySmall),
+            Text('${_eur(rec.risparmioAnnuoEur)}/anno', style: AppTextStyles.bodySmall),
+            Text(
+                payback == null
+                    ? 'rientro oltre 15 anni'
+                    : 'rientro ~${_num(payback, 1)} anni',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
+          ]),
+        ],
+      ),
     );
   }
 }
