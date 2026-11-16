@@ -116,6 +116,31 @@ class Settings(BaseSettings):
     LEGAL_FORO_COMPETENTE: str = Field(default="", description="foro competente (es. 'Milano')")
     LEGAL_DATA_EFFICACIA: str = Field(default="", description="data di efficacia dei documenti")
 
+    # Abbonamenti (app/core/billing.py). Spento = tutto illimitato come oggi.
+    # Acceso: prova gratuita (giorni + numero di sopralluoghi), poi serve un
+    # abbonamento attivo (Stripe o attivazione manuale dall'admin, es. bonifico)
+    # per creare sopralluoghi ed esportare in CENED. I dati restano sempre
+    # consultabili e modificabili.
+    BILLING_ENABLED: bool = Field(default=False)
+    TRIAL_DAYS: int = Field(default=30, ge=0)
+    TRIAL_MAX_SURVEYS: int = Field(default=5, ge=0)
+    # Stripe (vuoti = pagamento online non disponibile, resta l'attivazione manuale)
+    STRIPE_SECRET_KEY: str = Field(default="")
+    STRIPE_WEBHOOK_SECRET: str = Field(default="")
+    STRIPE_PRICE_MONTHLY: str = Field(default="", description="price_… del piano mensile")
+    STRIPE_PRICE_YEARLY: str = Field(default="", description="price_… del piano annuale")
+    # URL pubblico dell'app (ritorno da Stripe Checkout / Customer Portal)
+    PUBLIC_BASE_URL: str = Field(default="https://preape.cheic2.it")
+
+    # Accesso al Catasto tramite fornitore a pagamento (app/core/catasto/provider.py).
+    # "" = spento; "openapi" = Openapi.it (catasto.openapi.it). Il token si crea
+    # nella console del fornitore; SANDBOX=true usa test.catasto.openapi.it.
+    CATASTO_PROVIDER: str = Field(default="", description="'' | openapi")
+    CATASTO_OPENAPI_TOKEN: str = Field(default="")
+    CATASTO_OPENAPI_SANDBOX: bool = Field(default=True)
+    # Tetto di richieste a pagamento per utente nel mese solare (controllo costi)
+    CATASTO_MONTHLY_LIMIT: int = Field(default=20, ge=0)
+
     # Rate limiting (auth endpoints, per client IP)
     AUTH_RATE_LIMIT_PER_MINUTE: int = 10
     

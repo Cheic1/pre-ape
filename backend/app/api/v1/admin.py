@@ -6,8 +6,8 @@ same transaction as the action itself (reads included). Contract: spec
 docs/superpowers/specs/2026-10-18-catasto-admin-cened-design.md, section 2.
 """
 import uuid
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -25,7 +25,9 @@ from app.api.v1 import (
     get_current_user,
     get_db,
     is_admin,
+    user_entitlement,
 )
+from app.api.v1.billing import EntitlementOut
 from app.api.v1.cened import FORMAT_QUERY, CenedFormat, cened_sheet_for, cened_xml_response
 from app.api.v1.documents import DocumentMeta, document_content_response, document_meta
 from app.core.cened.sheet import CenedSheet
@@ -43,6 +45,18 @@ class AdminUser(BaseModel):
     survey_count: int
     document_count: int
     is_admin: bool
+    # Abbonamento (significativo solo con BILLING_ENABLED)
+    plan: Optional[str] = None
+    paid_until: Optional[datetime] = None
+    subscription_status: Optional[str] = None
+
+
+class SubscriptionUpdate(BaseModel):
+    """Attivazione manuale (es. bonifico): paid_until null = revoca."""
+    model_config = ConfigDict(extra="forbid")
+
+    paid_until: Optional[datetime] = None
+    plan: Optional[Literal["pro", "studio"]] = "pro"
 
 
 class AuditEntry(BaseModel):
@@ -130,6 +144,9 @@ async def list_users(admin: User = Depends(require_admin), db: Session = Depends
             survey_count=survey_counts.get(u.id, 0),
             document_count=document_counts.get(u.id, 0),
             is_admin=is_admin(u),
+            plan=u.plan,
+            paid_until=u.paid_until,
+            subscription_status=u.subscription_status,
         )
         for u in users
     ]
@@ -171,6 +188,35 @@ async def list_user_surveys(
     _audit(db, admin, "list_user_surveys", "user", user.id, {"email": user.email})
     db.commit()
     return result
+
+
+@router.post("/users/{user_id}/subscription", response_model=EntitlementOut)
+async def set_subscription(
+    user_id: UUID,
+    body: SubscriptionUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Imposta a mano la scadenza dell'abbonamento (clienti che pagano con bonifico)."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    paid_until = body.paid_until
+    if paid_until is not None and paid_until.tzinfo is not None:
+        # le colonne sono naive UTC
+        paid_until = paid_until.astimezone(timezone.utc).replace(tzinfo=None)
+    user.paid_until = paid_until
+    user.plan = body.plan if paid_until is not None else user.plan
+    _audit(
+        db,
+        admin,
+        "set_subscription",
+        "user",
+        user.id,
+        {"email": user.email, "paid_until": paid_until.isoformat() if paid_until else None, "plan": body.plan},
+    )
+    db.commit()
+    return user_entitlement(db, user).as_dict()
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

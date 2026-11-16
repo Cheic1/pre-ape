@@ -39,7 +39,17 @@ class User(Base):
     terms_accepted_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime)
-    
+
+    # Abbonamento (app.core.billing): valgono solo con BILLING_ENABLED.
+    # trial_ends_at null = created_at + TRIAL_DAYS. paid_until: attivazione
+    # manuale dall'admin (bonifico) o fine del periodo pagato su Stripe.
+    plan = Column(String(20))  # null | pro | studio
+    trial_ends_at = Column(DateTime)
+    paid_until = Column(DateTime)
+    stripe_customer_id = Column(String(64), index=True)
+    stripe_subscription_id = Column(String(64))
+    subscription_status = Column(String(20))  # stato Stripe: active, past_due, canceled…
+
     surveys = relationship("Survey", back_populates="user")
 
 
@@ -149,6 +159,36 @@ class AdminAuditLog(Base):
     target_id = Column(String(64))
     detail = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class CatastoRequest(Base):
+    """Richiesta a pagamento al fornitore catasto (visura, elaborato planimetrico…).
+
+    Il fornitore lavora in asincrono: la riga nasce ``pending`` e diventa
+    ``done`` (con ``document_id`` del PDF salvato fra i documenti del
+    sopralluogo) o ``failed``. Serve anche a contare la spesa per utente.
+    """
+    __tablename__ = "catasto_requests"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    survey_id = Column(
+        UUID(as_uuid=True), ForeignKey("surveys.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider = Column(String(20), nullable=False)
+    kind = Column(String(30), nullable=False)  # visura | elaborato_planimetrico | estratto_mappa
+    provider_request_id = Column(String(64))
+    status = Column(String(20), nullable=False, default="pending")  # pending | done | failed
+    params = Column(JSON)  # dati catastali richiesti (mai dati dei proprietari)
+    price_eur = Column(Float)  # prezzo di listino indicativo, per il controllo costi
+    error = Column(String(255))
+    document_id = Column(
+        UUID(as_uuid=True), ForeignKey("survey_documents.id", ondelete="SET NULL")
+    )
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class PhotoAnalysis(Base):

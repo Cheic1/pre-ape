@@ -26,6 +26,12 @@ _ADDITIVE_MIGRATIONS = (
     "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS cadastral JSON",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version VARCHAR(32)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(20)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS paid_until TIMESTAMP",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(64)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(64)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20)",
 )
 
 # Max request body: 14 photos × ~1 MB data-URL + JSON fields.

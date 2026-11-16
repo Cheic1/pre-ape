@@ -127,8 +127,42 @@ except GET /admin/audit writes an admin_audit_log row (same transaction).
   GET    /api/v1/admin/audit?limit=100&offset=0 -> 200 [AuditEntry] (newest first)
   The normal /surveys endpoints stay owner-only for admins too.
 
+  POST   /api/v1/admin/users/{id}/subscription {paid_until: datetime|null, plan?}
+                                                -> 200 Entitlement (manual activation,
+                                                   e.g. paid by bank transfer)
+
+Billing (app/api/v1/billing.py, app/core/billing.py). BILLING_ENABLED=false
+(default): everybody is "unlimited" and nothing below blocks anything.
+  GET  /api/v1/billing/me        -> 200 Entitlement {billing_enabled, status:
+         unlimited|active|trial|expired, can_create, plan?, paid_until?,
+         trial_ends_at?, trial_surveys_used, trial_surveys_max, reason?, online_payment}
+  POST /api/v1/billing/checkout  {interval: "month"|"year"} -> 200 {url} (Stripe
+         Checkout) | 503 Stripe not configured | 502 Stripe error
+  POST /api/v1/billing/portal    -> 200 {url} (Stripe Customer Portal) | 404 no customer
+  POST /api/v1/billing/webhook   (no auth, Stripe-Signature) -> 200 | 400 bad signature
+  With billing on and status "expired": POST /surveys and GET .../cened-xml
+  -> 402 {detail: reason}. Reading/editing/deleting own data is never blocked.
+
+Catasto (app/api/v1/catasto.py, app/core/catasto/provider.py): paid requests to
+a third-party provider, off unless CATASTO_PROVIDER is set (owner only).
+  GET  /api/v1/catasto/status    -> 200 {enabled, provider?, sandbox, monthly_limit,
+                                         used_this_month, prices: {kind: eur}}
+  POST /api/v1/surveys/{id}/catasto/requests
+         {kind: "visura"|"elaborato_planimetrico"|"estratto_mappa",
+          tipo_catasto: "F"|"T", provincia, comune, foglio, particella,
+          sezione?, sezione_urbana?, subalterno?, confirm_cost: true}
+                                  -> 201 CatastoRequest | 404 | 402 plan | 409 provider
+                                     off | 429 monthly limit | 502 provider error
+  GET  /api/v1/surveys/{id}/catasto/requests -> 200 [CatastoRequest] (newest first)
+  POST /api/v1/catasto/requests/{rid}/refresh -> 200 CatastoRequest (polls the
+         provider; when ready the PDF becomes a survey document, a visura is parsed
+         like an uploaded one)
+  CatastoRequest: {id, survey_id, kind, status: pending|done|failed, params,
+                   price_eur, error?, document_id?, created_at, updated_at}
+
 Errors: FastAPI default shape {"detail": ...} — 422 validation, 401 auth,
-404 not found OR not owned, 409 duplicate email, 429 rate limited.
+402 subscription required, 404 not found OR not owned, 409 duplicate email,
+429 rate limited.
 """
 from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks, Request
 from fastapi.security import OAuth2PasswordBearer
@@ -142,7 +176,7 @@ import logging
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.core import energy
+from app.core import billing as billing_core, energy
 from app.core.catasto import CadastralUnit, MAX_CADASTRAL_UNITS
 from app.core.energy import BuildingInputs, climate
 from app.core.config import settings
@@ -310,6 +344,21 @@ def _token_response(user: User) -> TokenResponse:
 def is_admin(user: User) -> bool:
     """Admin = email listed in settings.ADMIN_EMAILS (no UI to grant the role)."""
     return bool(user.email) and user.email.lower() in settings.admin_emails
+
+
+def user_entitlement(db: Session, user: User) -> billing_core.Entitlement:
+    """Stato dell'abbonamento (app.core.billing); illimitato con billing spento."""
+    count = 0
+    if settings.BILLING_ENABLED:
+        count = db.query(Survey).filter(Survey.user_id == user.id).count()
+    return billing_core.entitlement(user, count, admin=is_admin(user))
+
+
+def require_active_plan(db: Session, user: User) -> None:
+    """402 quando la prova è finita e non c'è un abbonamento attivo."""
+    ent = user_entitlement(db, user)
+    if not ent.can_create:
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=ent.reason)
 
 
 # API Schemas
@@ -601,6 +650,7 @@ async def create_survey(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    require_active_plan(db, current_user)
     db_survey = Survey(
         id=uuid.uuid4(),
         user_id=current_user.id,
@@ -853,8 +903,10 @@ async def analyze_generator_photo(survey_id: str):
 
 
 # Sub-routers (imported last: they depend on get_db / get_current_user above).
-from app.api.v1 import admin, cened, documents  # noqa: E402
+from app.api.v1 import admin, billing, catasto, cened, documents  # noqa: E402
 
 router.include_router(documents.router)
 router.include_router(admin.router)
 router.include_router(cened.router)
+router.include_router(billing.router)
+router.include_router(catasto.router)

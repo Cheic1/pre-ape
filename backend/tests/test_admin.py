@@ -142,6 +142,7 @@ def test_list_users_with_counts_and_audit(client, admin, auth_a):
     assert set(by_id[user_a]) == {
         "id", "email", "name", "created_at", "last_login",
         "survey_count", "document_count", "is_admin",
+        "plan", "paid_until", "subscription_status",
     }
 
     row = _last_audit(admin_email)

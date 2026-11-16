@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session, defer
 
-from app.api.v1 import get_current_user, get_db
+from app.api.v1 import get_current_user, get_db, require_active_plan
 from app.api.v1.documents import document_meta
 from app.core.cened.sheet import CenedSheet, build_cened_sheet
 from app.core.cened.xml_export import build_calcolo_xml_20, build_cened_xml_12
@@ -70,7 +70,9 @@ async def get_cened_xml(
     CENED importa solo archivi .zip: «File → Importa file XML 1.2» (format=1.2)
     o «File → Importa file XML» (format=2.0) estraggono l'unico XML contenuto.
     """
-    return cened_xml_response(_owned_survey(db, survey_id, current_user), format)
+    survey = _owned_survey(db, survey_id, current_user)
+    require_active_plan(db, current_user)
+    return cened_xml_response(survey, format)
 
 
 def cened_xml_response(survey: Survey, format: CenedFormat) -> Response:
