@@ -46,6 +46,15 @@ Energy estimate (DM 26/06/2015 classification, UNI/TS 11300 simplified)
   GET  /api/v1/climate/comuni?q=mil           -> 200 [{comune, provincia, zona, gradi_giorno…}]
   GET  /api/v1/climate/resolve?address=&lat=&lon= -> 200 comune | 404
 
+LLM consultant on the improvements (app.core.advisor, OpenAI-compatible LLM such
+as freellmapi; env LLM_BASE_URL / LLM_MODEL / LLM_API_KEY, empty = disabled)
+  GET  /api/v1/advisor/status -> 200 {enabled, modello}
+  POST /api/v1/advisor  (same body as /estimate) -> 200 {sintesi, raccomandazioni[{rif,
+       titolo, motivazione, priorita, classe, investimento_eur, incentivo_eur,
+       investimento_netto_eur, risparmio_annuo_eur, tempo_ritorno_anni,
+       tempo_ritorno_netto_anni, flusso_cassa_cumulato}], avvertenze, nota, modello}
+       503 not configured, 502 LLM error. Numbers always come from the engine.
+
 Endpoints (path ids are UUIDs -> 422 when malformed, per-field validation)
   GET    /api/v1/surveys                     -> 200 [SurveySummary] (caller's, newest first)
   POST   /api/v1/surveys                     -> 201 Survey (stored with user_id = caller)
@@ -142,7 +151,7 @@ import logging
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.core import energy
+from app.core import advisor, energy
 from app.core.catasto import CadastralUnit, MAX_CADASTRAL_UNITS
 from app.core.energy import BuildingInputs, climate
 from app.core.config import settings
@@ -809,6 +818,40 @@ async def estimate(
         latitude=payload.latitude,
         longitude=payload.longitude,
     )
+
+
+@router.get("/advisor/status")
+async def advisor_status(current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    """Whether the LLM consultant is configured (the app hides its button otherwise)."""
+    return {"enabled": advisor.is_enabled(),
+            "modello": settings.LLM_MODEL if advisor.is_enabled() else None}
+
+
+@router.post("/advisor")
+def run_advisor(
+    payload: EstimateRequest,
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """LLM consultant on the improvements (same body as /estimate, nothing stored).
+
+    503 when LLM_BASE_URL/LLM_MODEL are unset, 502 when the LLM fails. Sync
+    endpoint on purpose: FastAPI runs it in the threadpool while the HTTP call
+    to the LLM blocks.
+    """
+    try:
+        return advisor.run(
+            payload.building,
+            square_meters=payload.square_meters,
+            avg_height=payload.avg_height,
+            address=payload.address,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+        )
+    except advisor.AdvisorDisabled:
+        raise HTTPException(status_code=503, detail="Agente consulente non configurato")
+    except advisor.AdvisorError as exc:
+        logger.warning("Advisor failed: %s", exc)
+        raise HTTPException(status_code=502, detail=f"Agente consulente non disponibile: {exc}")
 
 
 @router.get("/climate/comuni")

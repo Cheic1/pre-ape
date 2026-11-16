@@ -5,6 +5,10 @@ La versione è la stessa per app (`frontend/pubspec.yaml`) e backend (`backend/p
 
 ## [Non rilasciato]
 
+### Aggiunto
+- Interventi migliorativi: per ogni intervento la stima mostra ora l'incentivo (detrazione 50% abitazione principale / 36% altre unità, in 10 anni; caldaie a sola fonte fossile escluse), il costo netto, il rientro con incentivo e il flusso di cassa cumulato su 15 anni. Nuovo campo facoltativo `abitazione_principale` nei dati edificio (se manca si assume abitazione principale e lo si dichiara). Valori indicativi, da verificare.
+- «Analisi consulente» nello step Risultati: un agente LLM (OpenAI-compatibile, es. freellmapi; `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` nel `.env`) sceglie e spiega gli interventi più convenienti, provando anche combinazioni con il motore di stima. Costi, incentivi, risparmi e rientro vengono sempre dal motore. Senza configurazione la scheda non compare.
+
 ### Corretto
 - Export CENED: un carattere di controllo nell'indirizzo o nei dati catastali (capita incollando testo da un PDF, es. la visura) rendeva l'XML illeggibile per CENED. Ora quei caratteri vengono tolti.
 - «Usa la mia posizione» su un sopralluogo già salvato non segnava la modifica come da salvare: uscendo non compariva l'avviso, e la scheda e lo .zip CENED partivano dai dati vecchi senza salvare prima.

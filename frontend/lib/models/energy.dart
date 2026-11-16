@@ -71,6 +71,11 @@ class Improvement {
     required this.investimentoEur,
     required this.classiGuadagnate,
     this.tempoRitornoAnni,
+    this.incentivoEur = 0,
+    this.incentivoTipo,
+    this.investimentoNettoEur,
+    this.tempoRitornoNettoAnni,
+    this.flussoCassaCumulato = const [],
   });
 
   factory Improvement.fromJson(Map<String, dynamic> j) => Improvement(
@@ -83,6 +88,13 @@ class Improvement {
         investimentoEur: _i(j['investimento_eur']),
         classiGuadagnate: _i(j['classi_guadagnate']),
         tempoRitornoAnni: (j['tempo_ritorno_anni'] as num?)?.toDouble(),
+        incentivoEur: _i(j['incentivo_eur']),
+        incentivoTipo: j['incentivo_tipo'] as String?,
+        investimentoNettoEur: (j['investimento_netto_eur'] as num?)?.round(),
+        tempoRitornoNettoAnni: (j['tempo_ritorno_netto_anni'] as num?)?.toDouble(),
+        flussoCassaCumulato: [
+          for (final v in (j['flusso_cassa_cumulato'] as List? ?? const [])) (v as num).round(),
+        ],
       );
 
   final String codice;
@@ -94,6 +106,19 @@ class Improvement {
   final int investimentoEur;
   final int classiGuadagnate;
   final double? tempoRitornoAnni;
+
+  /// Detrazione stimata (0 se l'intervento non è agevolato o il motore è vecchio).
+  final int incentivoEur;
+  final String? incentivoTipo;
+  final int? investimentoNettoEur;
+
+  /// Rientro considerando risparmio + rate della detrazione (anni).
+  final double? tempoRitornoNettoAnni;
+
+  /// Saldo cumulato in € dall'anno 0 (−investimento) all'anno 15.
+  final List<int> flussoCassaCumulato;
+
+  bool get hasIncentive => incentivoEur > 0;
 
   bool get isGlobal => codice == 'riqualificazione_globale';
 }
@@ -166,9 +191,74 @@ class EnergyResult {
 
   List<Consumption> get consumi =>
       _l(raw['consumi']).map(Consumption.fromJson).toList(growable: false);
+  String? get noteIncentivi => raw['note_incentivi'] as String?;
+
   List<Improvement> get interventi =>
       _l(raw['interventi']).map(Improvement.fromJson).toList(growable: false);
   List<Assumption> get assunzioni =>
       _l(raw['assunzioni']).map(Assumption.fromJson).toList(growable: false);
   List<String> get note => (raw['note'] as List?)?.cast<String>() ?? const [];
+}
+
+
+/// Raccomandazione dell'agente consulente: testo dell'LLM, numeri del motore.
+class AdvisorRecommendation {
+  const AdvisorRecommendation({
+    required this.titolo,
+    required this.motivazione,
+    required this.classe,
+    required this.investimentoEur,
+    required this.incentivoEur,
+    required this.risparmioAnnuoEur,
+    this.investimentoNettoEur,
+    this.tempoRitornoAnni,
+    this.tempoRitornoNettoAnni,
+  });
+
+  factory AdvisorRecommendation.fromJson(Map<String, dynamic> j) => AdvisorRecommendation(
+        titolo: j['titolo'] as String? ?? '',
+        motivazione: j['motivazione'] as String? ?? '',
+        classe: j['classe'] as String? ?? '',
+        investimentoEur: _i(j['investimento_eur']),
+        incentivoEur: _i(j['incentivo_eur']),
+        risparmioAnnuoEur: _i(j['risparmio_annuo_eur']),
+        investimentoNettoEur: (j['investimento_netto_eur'] as num?)?.round(),
+        tempoRitornoAnni: (j['tempo_ritorno_anni'] as num?)?.toDouble(),
+        tempoRitornoNettoAnni: (j['tempo_ritorno_netto_anni'] as num?)?.toDouble(),
+      );
+
+  final String titolo;
+  final String motivazione;
+  final String classe;
+  final int investimentoEur;
+  final int incentivoEur;
+  final int risparmioAnnuoEur;
+  final int? investimentoNettoEur;
+  final double? tempoRitornoAnni;
+  final double? tempoRitornoNettoAnni;
+}
+
+/// Risposta di `POST /advisor`.
+class AdvisorResult {
+  const AdvisorResult({
+    required this.sintesi,
+    required this.raccomandazioni,
+    required this.avvertenze,
+    required this.nota,
+  });
+
+  factory AdvisorResult.fromJson(Map<String, dynamic> j) => AdvisorResult(
+        sintesi: j['sintesi'] as String? ?? '',
+        raccomandazioni: [
+          for (final r in (j['raccomandazioni'] as List? ?? const []))
+            if (r is Map<String, dynamic>) AdvisorRecommendation.fromJson(r),
+        ],
+        avvertenze: [for (final w in (j['avvertenze'] as List? ?? const [])) '$w'],
+        nota: j['nota'] as String? ?? '',
+      );
+
+  final String sintesi;
+  final List<AdvisorRecommendation> raccomandazioni;
+  final List<String> avvertenze;
+  final String nota;
 }

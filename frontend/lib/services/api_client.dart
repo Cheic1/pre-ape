@@ -215,6 +215,28 @@ class ApiClient {
     return EnergyResult.fromJson(json);
   }
 
+  /// `GET /api/v1/advisor/status` → l'agente consulente è configurato?
+  /// Qualsiasi errore = disattivato (il pulsante resta nascosto).
+  Future<bool> advisorEnabled() async {
+    try {
+      final json = await _request('GET', '$_apiPrefix/advisor/status');
+      return json['enabled'] == true;
+    } on UnauthorizedException {
+      rethrow;
+    } on ApiException {
+      return false;
+    }
+  }
+
+  /// `POST /api/v1/advisor` (stesso body di [estimate]) → analisi dell'agente
+  /// LLM sugli interventi. Timeout lungo: il modello può metterci un minuto.
+  /// 503 = non configurato, 502 = servizio LLM non disponibile.
+  Future<AdvisorResult> advisor(Map<String, Object?> body) async {
+    final json = await _request('POST', '$_apiPrefix/advisor',
+        body: body, timeout: const Duration(seconds: 120));
+    return AdvisorResult.fromJson(json);
+  }
+
   /// `GET /api/v1/climate/comuni?q=` → autocompletamento comuni.
   Future<List<ComuneInfo>> searchComuni(String query) async {
     final q = Uri.encodeQueryComponent(query);
@@ -334,12 +356,14 @@ class ApiClient {
     String path, {
     Object? body,
     bool authenticated = true,
+    Duration? timeout,
   }) async {
     final payload = await _requestAny(
       method,
       path,
       body: body,
       authenticated: authenticated,
+      timeout: timeout,
     );
     if (payload is Map<String, dynamic>) return payload;
     throw ApiException(200, 'Risposta non JSON dal server ($method $path)');
@@ -352,7 +376,9 @@ class ApiClient {
     String path, {
     Object? body,
     bool authenticated = true,
+    Duration? timeout,
   }) async {
+    final limit = timeout ?? this.timeout;
     final uri = Uri.parse('$baseUrl$path');
     final headers = _headers(authenticated: authenticated);
     final encoded = body == null ? null : jsonEncode(body);
@@ -372,10 +398,10 @@ class ApiClient {
 
     final http.Response response;
     try {
-      response = await pending.timeout(timeout);
+      response = await pending.timeout(limit);
     } on TimeoutException {
       throw ApiTimeoutException(
-        'Nessuna risposta da $baseUrl$path entro ${_formatTimeout(timeout)}',
+        'Nessuna risposta da $baseUrl$path entro ${_formatTimeout(limit)}',
       );
     } on http.ClientException catch (e) {
       throw ApiException(0, 'Errore di rete: ${e.message}');

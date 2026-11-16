@@ -299,10 +299,10 @@ String _improvements(EnergyResult r) {
   return '''
   <h2>Interventi migliorativi raccomandati</h2>
   <table>
-    <tr><th>Intervento</th><th class="num">Classe</th><th class="num">−EP</th><th class="num">Risparmio/anno</th><th class="num">Costo indicativo</th><th class="num">Rientro</th></tr>
-    ${r.interventi.map((i) => '<tr${i.isGlobal ? ' style="font-weight:700"' : ''}><td>${_esc(i.intervento)}</td><td class="num"><span class="badge" style="background:${_classColors[i.classe] ?? '#667085'}">${_esc(i.classe)}</span></td><td class="num">${_n(i.riduzioneEpPct)}%</td><td class="num">${_eur(i.risparmioAnnuoEur)}</td><td class="num">${_eur(i.investimentoEur)}</td><td class="num">${i.tempoRitornoAnni == null ? '—' : '${_n(i.tempoRitornoAnni)} anni'}</td></tr>').join('\n    ')}
+    <tr><th>Intervento</th><th class="num">Classe</th><th class="num">−EP</th><th class="num">Risparmio/anno</th><th class="num">Costo indicativo</th><th class="num">Incentivo</th><th class="num">Rientro</th><th class="num">Rientro con incentivo</th></tr>
+    ${r.interventi.map((i) => '<tr${i.isGlobal ? ' style="font-weight:700"' : ''}><td>${_esc(i.intervento)}</td><td class="num"><span class="badge" style="background:${_classColors[i.classe] ?? '#667085'}">${_esc(i.classe)}</span></td><td class="num">${_n(i.riduzioneEpPct)}%</td><td class="num">${_eur(i.risparmioAnnuoEur)}</td><td class="num">${_eur(i.investimentoEur)}</td><td class="num">${i.hasIncentive ? _eur(i.incentivoEur) : '—'}</td><td class="num">${i.tempoRitornoAnni == null ? '—' : '${_n(i.tempoRitornoAnni)} anni'}</td><td class="num">${i.tempoRitornoNettoAnni == null ? (i.hasIncentive ? '&gt; 15 anni' : '—') : '${_n(i.tempoRitornoNettoAnni, 1)} anni'}</td></tr>').join('\n    ')}
   </table>
-  <p class="note">Costi parametrici indicativi (IVA inclusa) al lordo di eventuali detrazioni fiscali; da verificare con preventivi.</p>''';
+  <p class="note">Costi parametrici indicativi (IVA inclusa), da verificare con preventivi. «Rientro» è al lordo degli incentivi; «Rientro con incentivo» somma al risparmio le rate annuali della detrazione.${r.noteIncentivi == null ? '' : ' ${_esc(r.noteIncentivi!)}'}</p>''';
 }
 
 String _money(num v) => '€ ${v.toStringAsFixed(2).replaceAll('.', ',')}';

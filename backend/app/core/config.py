@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = Field(default="")
     ANTHROPIC_API_KEY: str = Field(default="")
     
+    # Agente consulente (LLM OpenAI-compatibile, es. freellmapi). Vuoto = disattivato.
+    LLM_BASE_URL: str = Field(default="", description="es. http://host:porta/v1")
+    LLM_API_KEY: str = Field(default="")
+    LLM_MODEL: str = Field(default="", description="modello con tool calling")
+    LLM_TIMEOUT_SECONDS: float = Field(default=90.0)
+
     # Storage
     UPLOAD_DIR: str = Field(default="/tmp/pre_ape_uploads")
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
