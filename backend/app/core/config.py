@@ -24,7 +24,7 @@ def _decode_documents_key(value: str) -> bytes | None:
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "Pre-APE"
-    VERSION: str = "1.0.0"
+    VERSION: str = "1.1.0"
     DEBUG: bool = False
     APP_ENV: str = Field(
         default="production",

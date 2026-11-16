@@ -119,3 +119,33 @@ il banner **"Bozza da far verificare a un legale"**.
 
 - Render: ogni push su `main` ridistribuisce da solo.
 - Server di casa: `git pull && docker compose up -d --build`.
+  Per una versione precisa: `git fetch --tags && git checkout v1.1.0 && docker compose up -d --build`.
+  Prima di aggiornare conviene un backup: `docker compose exec db pg_dump -U preape pre_ape > backup-$(date +%F).sql`.
+
+## Funzioni AI facoltative (consulente interventi e planimetria → CAD)
+
+Due funzioni usano un modello AI con API compatibile OpenAI (es. freellmapi sul mini PC):
+l'«Analisi consulente» degli interventi (serve un modello con *tool calling*) e la lettura
+di scala, altezza e nomi dei vani dalla planimetria (serve un modello con *visione*).
+Nel `.env`, accanto a `docker-compose.yml`:
+
+```
+LLM_BASE_URL=http://host.docker.internal:3001/v1   # freellmapi sull'host; deve finire con /v1
+LLM_MODEL=<modello con visione e tool calling, non "auto">
+LLM_API_KEY=<chiave unificata dal pannello freellmapi>
+```
+
+Poi `docker compose up -d`. Se le variabili restano vuote l'app funziona lo stesso: la scheda
+«Analisi consulente» non compare e la planimetria usa solo il riconoscimento automatico.
+Verifica: `curl -s http://127.0.0.1:7032/api/v1/advisor/status` deve rispondere `true`.
+
+## Pratiche di esempio (demo)
+
+Sei sopralluoghi di fantasia (Milano, Seriate, Monza, Bormio, Brescia, Pavia: dalla classe G
+alla A4, uno in bozza con la planimetria di prova e il disegno CAD) su un account demo:
+
+```
+docker compose exec app python -m app.esempi --email demo@preape.it --password '<password lunga>'
+```
+
+Crea l'account se non esiste e salta le pratiche già presenti: si può rilanciare.

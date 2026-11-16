@@ -62,7 +62,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="Pre-APE API",
     description="API for Pre-APE - Preliminary Energy Performance Assessment",
-    version="1.0.0",
+    version="1.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -145,7 +145,7 @@ app.include_router(api_v1_router)
 async def api_info():
     return JSONResponse({
         "app": "Pre-APE API",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "status": "running",
     })
 
