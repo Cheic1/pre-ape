@@ -64,12 +64,14 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = Field(default="llava:7b")
     OPENAI_API_KEY: str = Field(default="")
     ANTHROPIC_API_KEY: str = Field(default="")
-    
-    # Agente consulente (LLM OpenAI-compatibile, es. freellmapi). Vuoto = disattivato.
-    LLM_BASE_URL: str = Field(default="", description="es. http://host:porta/v1")
+    # Agente LLM opzionale, API compatibile OpenAI (freellmapi, OpenAI, OpenRouter,
+    # Ollama...). Vuoto = disattivato. Usato da: consulente interventi (serve tool
+    # calling) e planimetria -> CAD (serve visione). Scegliere un modello con entrambe.
+    LLM_BASE_URL: str = Field(default="", description="es. http://host.docker.internal:3001/v1")
     LLM_API_KEY: str = Field(default="")
-    LLM_MODEL: str = Field(default="", description="modello con tool calling")
-    LLM_TIMEOUT_SECONDS: float = Field(default=90.0)
+    LLM_MODEL: str = Field(default="", description="modello con visione e tool calling, non 'auto'")
+    LLM_TIMEOUT_S: float = Field(default=45.0, description="timeout planimetria")
+    LLM_TIMEOUT_SECONDS: float = Field(default=90.0, description="timeout consulente")
 
     # Storage
     UPLOAD_DIR: str = Field(default="/tmp/pre_ape_uploads")

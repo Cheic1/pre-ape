@@ -27,9 +27,13 @@ services:
       LEGAL_SERVER_UBICAZIONE: ${LEGAL_SERVER_UBICAZIONE:-}
       LEGAL_FORO_COMPETENTE: ${LEGAL_FORO_COMPETENTE:-}
       LEGAL_DATA_EFFICACIA: ${LEGAL_DATA_EFFICACIA:-}
+      # Agente LLM opzionale (consulente interventi + planimetria, vedi .env.example)
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
+    # host.docker.internal = il mini PC (es. freellmapi in esecuzione sull'host)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:${APP_PORT:-7032}:7031"
 
