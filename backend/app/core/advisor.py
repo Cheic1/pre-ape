@@ -150,6 +150,7 @@ class _Session:
         self.kwargs = kwargs
         self.base = base
         self.scenarios: Dict[str, Dict[str, Any]] = {}
+        self.reserved = {i.get("codice") for i in base.get("interventi", [])}
 
     def simulate(self, args: Dict[str, Any]) -> Dict[str, Any]:
         if len(self.scenarios) >= MAX_SCENARIOS:
@@ -161,12 +162,15 @@ class _Session:
         bad = sorted(set(changes) - _EDITABLE)
         if bad:
             return {"errore": f"campi non modificabili: {', '.join(bad)}"}
+        if name in self.reserved:
+            return {"errore": f"nome già usato da un intervento simulato: {name}"}
         try:
             invest = float(args.get("investimento_eur") or 0)
         except (TypeError, ValueError):
             return {"errore": "investimento_eur non numerico"}
-        if not 0 < invest <= 500_000:
-            return {"errore": "investimento_eur fuori scala"}
+        if not 100 <= invest <= 500_000:  # NaN/inf falliscono il confronto
+            return {"errore": "investimento_eur fuori scala (100–500000 €)"}
+        invest = int(round(invest, -2))
         try:
             variant = BuildingInputs.model_validate(
                 {**self.building.model_dump(exclude_none=True), **changes})
@@ -177,7 +181,6 @@ class _Session:
         principale = self.building.abitazione_principale is not False
         rate = engine.INCENTIVE_RATE_MAIN if principale else engine.INCENTIVE_RATE_OTHER
         incentive = invest * rate if args.get("agevolabile", True) else 0.0
-        invest = int(round(invest, -2))
         out = {
             "codice": name,
             "intervento": name,
@@ -245,17 +248,27 @@ def run(
             msg = resp["choices"][0]["message"]
         except (KeyError, IndexError, TypeError) as exc:
             raise AdvisorError("risposta del servizio LLM senza messaggio") from exc
+        if not isinstance(msg, dict):
+            raise AdvisorError("risposta del servizio LLM senza messaggio")
         calls = msg.get("tool_calls") or []
+        if not isinstance(calls, list) or not all(isinstance(c, dict) for c in calls):
+            raise AdvisorError("il modello ha restituito chiamate a strumenti non valide")
         if not calls:
-            final = _parse_final(msg.get("content") or "")
+            content = msg.get("content")
+            final = _parse_final(content if isinstance(content, str) else "")
             break
         messages.append({"role": "assistant", "content": msg.get("content") or "",
                          "tool_calls": calls})
         for call in calls:
-            fn = (call.get("function") or {})
-            try:
-                args = json.loads(fn.get("arguments") or "{}")
-            except ValueError:
+            fn = call.get("function")
+            fn = fn if isinstance(fn, dict) else {}
+            args = fn.get("arguments") or "{}"
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except ValueError:
+                    args = {}
+            if not isinstance(args, dict):
                 args = {}
             out = (session.simulate(args) if fn.get("name") == "simula_scenario"
                    else {"errore": "strumento sconosciuto"})
@@ -267,7 +280,8 @@ def run(
     known = {i["codice"]: i for i in base.get("interventi", [])}
     known.update(session.scenarios)
     recs = []
-    for rec in (final.get("raccomandazioni") or [])[:4]:
+    raw_recs = final.get("raccomandazioni")
+    for rec in (raw_recs if isinstance(raw_recs, list) else [])[:4]:
         if not isinstance(rec, dict):
             continue
         ref = str(rec.get("rif") or "")
@@ -284,7 +298,12 @@ def run(
                 "incentivo_eur", "investimento_netto_eur", "tempo_ritorno_anni",
                 "tempo_ritorno_netto_anni", "flusso_cassa_cumulato")},
         })
-    warnings = [str(w)[:300] for w in (final.get("avvertenze") or []) if w][:5]
+    raw_warnings = final.get("avvertenze") or []
+    if isinstance(raw_warnings, str):
+        raw_warnings = [raw_warnings]
+    elif not isinstance(raw_warnings, list):
+        raw_warnings = []
+    warnings = [str(w)[:300] for w in raw_warnings if w][:5]
     return {
         "modello": settings.LLM_MODEL,
         "classe_attuale": base["classe"],
